@@ -1,0 +1,36 @@
+{
+  "dart.flutterSdkPath": null,
+  "dart.sdkPath": null,
+  "dart.lineLength": 120,
+  "dart.insertArgumentPlaceholders": false,
+  "dart.previewFlutterUiGuides": true,
+  "dart.previewFlutterUiGuidesCustomTracking": true,
+  "dart.openDevTools": "flutter",
+  "dart.warnWhenEditingFilesOutsideWorkspace": true,
+  "dart.warnWhenEditingFilesInPubCache": true,
+  "dart.allowAnalytics": false,
+  "dart.checkForSdkUpdates": true,
+  "dart.analysisExcludedFolders": [
+    "build",
+    ".dart_tool"
+  ],
+  "files.exclude": {
+    "**/.git": true,
+    "**/.svn": true,
+    "**/.hg": true,
+    "**/CVS": true,
+    "**/.DS_Store": true,
+    "**/Thumbs.db": true,
+    "**/.dart_tool": true,
+    "**/build": true
+  },
+  "editor.formatOnSave": true,
+  "editor.formatOnType": true,
+  "editor.rulers": [120],
+  "editor.tabSize": 2,
+  "editor.insertSpaces": true,
+  "editor.detectIndentation": false,
+  "files.trimTrailingWhitespace": true,
+  "files.insertFinalNewline": true,
+  "files.trimFinalNewlines": true
+}
