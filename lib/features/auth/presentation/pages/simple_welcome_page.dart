@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:pinput/pinput.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
 import 'package:metriagro/core/theme/app_theme.dart';
@@ -17,25 +16,22 @@ class SimpleWelcomePage extends StatefulWidget {
 
 class _SimpleWelcomePageState extends State<SimpleWelcomePage> {
   final _formKey = GlobalKey<FormState>();
-  final _emailOrPhoneController = TextEditingController();
+  final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
-  final _otpController = TextEditingController();
 
   bool _isLogin = true;
   bool _obscurePassword = true;
   bool _obscureConfirmPassword = true;
-  bool _isOtpSent = false;
   bool _isLoading = false;
 
   // GoogleSignIn is now handled by AuthService
 
   @override
   void dispose() {
-    _emailOrPhoneController.dispose();
+    _emailController.dispose();
     _passwordController.dispose();
     _confirmPasswordController.dispose();
-    _otpController.dispose();
     super.dispose();
   }
 
@@ -65,12 +61,10 @@ class _SimpleWelcomePageState extends State<SimpleWelcomePage> {
                 const SizedBox(height: 24),
                 _buildDivider(),
                 const SizedBox(height: 24),
-                if (_isOtpSent) _buildOtpInput() else _buildEmailOrPhoneInput(),
-                if (!_isOtpSent) ...[
-                  const SizedBox(height: 16),
-                  _buildPasswordInput(),
-                  if (!_isLogin) ...[const SizedBox(height: 16), _buildConfirmPasswordInput()],
-                ],
+                _buildEmailInput(),
+                const SizedBox(height: 16),
+                _buildPasswordInput(),
+                if (!_isLogin) ...[const SizedBox(height: 16), _buildConfirmPasswordInput()],
                 const SizedBox(height: 24),
                 _buildSubmitButton(),
                 const SizedBox(height: 16),
@@ -147,12 +141,12 @@ class _SimpleWelcomePageState extends State<SimpleWelcomePage> {
     );
   }
 
-  Widget _buildEmailOrPhoneInput() {
+  Widget _buildEmailInput() {
     return TextFormField(
-      controller: _emailOrPhoneController,
+      controller: _emailController,
       keyboardType: TextInputType.emailAddress,
       decoration: InputDecoration(
-        hintText: 'Ingresa tu email o teléfono',
+        hintText: 'Ingresa tu email',
         hintStyle: const TextStyle(color: AppTheme.textHint),
         filled: true,
         fillColor: Colors.white,
@@ -172,13 +166,9 @@ class _SimpleWelcomePageState extends State<SimpleWelcomePage> {
       ),
       validator: (value) {
         if (value == null || value.isEmpty) {
-          return 'Por favor ingresa tu email o teléfono';
+          return 'Por favor ingresa tu email';
         }
-        if (value.contains('@')) {
-          return Validators.validateEmail(value);
-        } else {
-          return Validators.validatePhoneNumber(value);
-        }
+        return Validators.validateEmail(value);
       },
     );
   }
@@ -258,36 +248,6 @@ class _SimpleWelcomePageState extends State<SimpleWelcomePage> {
     );
   }
 
-  Widget _buildOtpInput() {
-    return Pinput(
-      controller: _otpController,
-      length: 6,
-      defaultPinTheme: PinTheme(
-        width: 48,
-        height: 48,
-        textStyle: const TextStyle(fontSize: 20, fontWeight: FontWeight.w600, color: AppTheme.textPrimary),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          border: Border.all(color: AppTheme.textHint),
-          borderRadius: BorderRadius.circular(12),
-        ),
-      ),
-      focusedPinTheme: PinTheme(
-        width: 48,
-        height: 48,
-        textStyle: const TextStyle(fontSize: 20, fontWeight: FontWeight.w600, color: AppTheme.textPrimary),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          border: Border.all(color: AppTheme.primaryColor, width: 2),
-          borderRadius: BorderRadius.circular(12),
-        ),
-      ),
-      onCompleted: (pin) {
-        _handleOtpVerification(pin);
-      },
-    );
-  }
-
   Widget _buildSubmitButton() {
     return SizedBox(
       height: 56,
@@ -309,11 +269,7 @@ class _SimpleWelcomePageState extends State<SimpleWelcomePage> {
                 ),
               )
             : Text(
-                _isOtpSent
-                    ? 'Verificar código'
-                    : _isLogin
-                    ? 'Iniciar sesión'
-                    : 'Crear cuenta',
+                _isLogin ? 'Iniciar sesión' : 'Crear cuenta',
                 style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
               ),
       ),
@@ -332,11 +288,9 @@ class _SimpleWelcomePageState extends State<SimpleWelcomePage> {
           onTap: () {
             setState(() {
               _isLogin = !_isLogin;
-              _isOtpSent = false;
-              _emailOrPhoneController.clear();
+              _emailController.clear();
               _passwordController.clear();
               _confirmPasswordController.clear();
-              _otpController.clear();
             });
           },
           child: Text(
@@ -407,71 +361,50 @@ class _SimpleWelcomePageState extends State<SimpleWelcomePage> {
 
   void _handleSubmit() {
     if (_formKey.currentState!.validate()) {
-      if (_isOtpSent) {
-        _handleOtpVerification(_otpController.text);
-      } else {
-        _handleEmailOrPhoneAuth();
-      }
+      _handleEmailAuth();
     }
   }
 
-  void _handleEmailOrPhoneAuth() async {
-    final emailOrPhone = _emailOrPhoneController.text.trim();
+  void _handleEmailAuth() async {
+    final email = _emailController.text.trim();
     final password = _passwordController.text.trim();
 
-    if (emailOrPhone.contains('@')) {
-      // Email authentication
-      setState(() {
-        _isLoading = true;
-      });
+    setState(() {
+      _isLoading = true;
+    });
 
-      try {
-        UserCredential? userCredential;
+    try {
+      UserCredential? userCredential;
 
-        if (_isLogin) {
-          // Sign in
-          userCredential = await AuthService.signInWithEmailAndPassword(email: emailOrPhone, password: password);
-          await FirebaseAnalyticsConfig.logLogin(method: 'email');
-        } else {
-          // Sign up
-          userCredential = await AuthService.createUserWithEmailAndPassword(email: emailOrPhone, password: password);
-          await FirebaseAnalyticsConfig.logSignUp(method: 'email');
-        }
-
-        if (userCredential?.user != null) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(_isLogin ? 'Inicio de sesión exitoso' : 'Cuenta creada exitosamente'),
-              backgroundColor: AppTheme.successColor,
-            ),
-          );
-
-          // TODO: Navigate to main app or home screen
-          // Navigator.pushReplacementNamed(context, '/home');
-        }
-      } catch (error) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(error.toString()), backgroundColor: AppTheme.errorColor));
-      } finally {
-        setState(() {
-          _isLoading = false;
-        });
+      if (_isLogin) {
+        // Sign in
+        userCredential = await AuthService.signInWithEmailAndPassword(email: email, password: password);
+        await FirebaseAnalyticsConfig.logLogin(method: 'email');
+      } else {
+        // Sign up
+        userCredential = await AuthService.createUserWithEmailAndPassword(email: email, password: password);
+        await FirebaseAnalyticsConfig.logSignUp(method: 'email');
       }
-    } else {
-      // Phone authentication - send OTP
-      setState(() {
-        _isOtpSent = true;
-      });
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Código de verificación enviado'), backgroundColor: AppTheme.successColor),
-      );
-    }
-  }
 
-  void _handleOtpVerification(String otp) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Código verificado exitosamente'), backgroundColor: AppTheme.successColor),
-    );
+      if (userCredential?.user != null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(_isLogin ? 'Inicio de sesión exitoso' : 'Cuenta creada exitosamente'),
+            backgroundColor: AppTheme.successColor,
+          ),
+        );
+
+        // TODO: Navigate to main app or home screen
+        // Navigator.pushReplacementNamed(context, '/home');
+      }
+    } catch (error) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(error.toString()), backgroundColor: AppTheme.errorColor));
+    } finally {
+      setState(() {
+        _isLoading = false;
+      });
+    }
   }
 }
