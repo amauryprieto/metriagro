@@ -10,13 +10,14 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:metriagro/main.dart';
 
 void main() {
-  testWidgets('App starts with login page', (WidgetTester tester) async {
+  testWidgets('App starts with welcome page', (WidgetTester tester) async {
     // Build our app and trigger a frame.
     await tester.pumpWidget(const MetriagroApp());
 
-    // Verify that our app shows the login page
+    // Verify that our app shows the welcome page
     expect(find.text('Metriagro'), findsOneWidget);
-    expect(find.text('Email'), findsOneWidget);
-    expect(find.text('Contraseña'), findsOneWidget);
+    expect(find.text('Haz tu mejor trabajo con Metriagro'), findsOneWidget);
+    expect(find.text('Continuar con Google'), findsOneWidget);
+    expect(find.text('Ingresa tu email o teléfono'), findsOneWidget);
   });
 }
