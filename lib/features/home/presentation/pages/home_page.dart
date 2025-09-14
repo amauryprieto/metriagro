@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
-import 'dart:io';
 
 import 'package:metriagro/core/theme/app_theme.dart';
 import 'package:metriagro/core/services/image_picker_service.dart';
@@ -29,8 +28,6 @@ class _HomePageState extends State<HomePage> {
         padding: const EdgeInsets.all(24.0),
         child: Column(
           children: [
-            const SizedBox(height: 32),
-            _buildWelcomeSection(),
             const SizedBox(height: 32),
             _buildUpgradeCard(),
             const SizedBox(height: 48),
@@ -72,27 +69,6 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  Widget _buildWelcomeSection() {
-    return Column(
-      children: [
-        Container(
-          width: 80,
-          height: 80,
-          decoration: BoxDecoration(
-            color: AppTheme.primaryColor.withOpacity(0.1),
-            borderRadius: BorderRadius.circular(40),
-          ),
-          child: const Icon(Icons.analytics_outlined, size: 40, color: AppTheme.primaryColor),
-        ),
-        const SizedBox(height: 16),
-        const Text(
-          '¡Bienvenido de vuelta!',
-          style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: AppTheme.textPrimary),
-        ),
-      ],
-    );
-  }
-
   Widget _buildUpgradeCard() {
     return Container(
       width: double.infinity,
@@ -117,37 +93,25 @@ class _HomePageState extends State<HomePage> {
                       style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: AppTheme.textPrimary),
                     ),
                     const SizedBox(height: 4),
-                    const Text(
-                      '¿Necesitas más análisis?',
-                      style: TextStyle(fontSize: 14, color: AppTheme.textSecondary),
+                    GestureDetector(
+                      onTap: () {
+                        // TODO: Navegar a página de planes/upgrade
+                        _navigateToUpgradePage();
+                      },
+                      child: Text(
+                        '¿Necesitas más análisis?',
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: AppTheme.primaryColor,
+                          fontWeight: FontWeight.w500,
+                          decoration: TextDecoration.underline,
+                        ),
+                      ),
                     ),
                   ],
                 ),
               ),
             ],
-          ),
-          const SizedBox(height: 16),
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton(
-              onPressed: () {
-                // TODO: Implementar upgrade
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Funcionalidad de upgrade próximamente'),
-                    backgroundColor: AppTheme.primaryColor,
-                  ),
-                );
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppTheme.primaryColor,
-                foregroundColor: Colors.white,
-                elevation: 0,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                padding: const EdgeInsets.symmetric(vertical: 12),
-              ),
-              child: const Text('Upgrade Plan', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
-            ),
           ),
         ],
       ),
@@ -368,5 +332,12 @@ class _HomePageState extends State<HomePage> {
         _isLoading = false;
       });
     }
+  }
+
+  void _navigateToUpgradePage() {
+    // TODO: Implementar navegación a página de planes/upgrade
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Próximamente: Página de planes y upgrade'), backgroundColor: AppTheme.primaryColor),
+    );
   }
 }
