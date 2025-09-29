@@ -14,6 +14,8 @@ import 'package:dio/dio.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 
 import '../network/network_info.dart';
+import '../services/ml_inference_service.dart';
+import '../services/gcp_disease_api_service.dart';
 
 final sl = GetIt.instance;
 
@@ -27,6 +29,8 @@ Future<void> configureDependencies() async {
 
   // Core
   sl.registerLazySingleton<NetworkInfo>(() => NetworkInfoImpl());
+  sl.registerLazySingleton<MlInferenceService>(() => LocalTfliteInferenceService());
+  sl.registerLazySingleton<GcpDiseaseApiService>(() => GcpDiseaseApiServiceImpl(sl()));
 
   // External
   sl.registerLazySingleton(() => SharedPreferences.getInstance());

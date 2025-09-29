@@ -1,9 +1,16 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:dio/dio.dart';
 
 import 'package:metriagro/core/theme/app_theme.dart';
 import 'package:metriagro/core/services/image_picker_service.dart';
 import 'package:metriagro/core/services/permission_service.dart';
+import 'package:metriagro/core/network/network_info.dart';
+import 'package:metriagro/core/services/ml_inference_service.dart';
+import 'package:metriagro/core/services/gcp_disease_api_service.dart';
+import 'package:metriagro/shared/models/disease_detection_result.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -15,6 +22,9 @@ class HomePage extends StatefulWidget {
 class _HomePageState extends State<HomePage> {
   final ImagePickerService _imagePickerService = ImagePickerService();
   final PermissionService _permissionService = PermissionService();
+  final NetworkInfo _networkInfo = NetworkInfoImpl();
+  final MlInferenceService _mlService = LocalTfliteInferenceService();
+  final GcpDiseaseApiService _gcpService = GcpDiseaseApiServiceImpl(Dio());
 
   int _remainingQueries = 5; // Número de consultas gratis
   bool _isLoading = false;
@@ -313,12 +323,41 @@ class _HomePageState extends State<HomePage> {
       XFile? image = await _imagePickerService.pickImage(source);
 
       if (image != null) {
-        // TODO: Procesar la imagen con el asistente de IA
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Imagen seleccionada: ${image.name}'), backgroundColor: AppTheme.successColor),
+        final isConnected = await _networkInfo.isConnected;
+        final file = File(image.path);
+        DiseaseDetectionResult result;
+        try {
+          if (isConnected) {
+            result = await _gcpService.uploadAndAnalyze(file);
+          } else {
+            result = await _mlService.analyzeImage(file);
+          }
+        } catch (_) {
+          // Fallback to local if cloud fails
+          result = await _mlService.analyzeImage(file);
+        }
+
+        await showDialog<void>(
+          context: context,
+          builder: (ctx) {
+            return AlertDialog(
+              title: const Text('Análisis completado'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Resultado: ${result.diseaseName ?? (result.hasDisease ? 'Enfermedad detectada' : 'Sin enfermedad')}',
+                  ),
+                  const SizedBox(height: 8),
+                  Text('Confianza: ${(result.confidence * 100).toStringAsFixed(1)}%'),
+                ],
+              ),
+              actions: [TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('Aceptar'))],
+            );
+          },
         );
 
-        // Reducir consultas disponibles
         setState(() {
           _remainingQueries--;
         });
