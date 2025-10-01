@@ -54,13 +54,13 @@ dependencies:
   google_sign_in: ^6.2.1
 
   # Phone Auth
-  pinput: ^3.0.1
+  pinput: ^5.0.2
 
   # Analytics
   mixpanel_flutter: ^2.2.0
 
   # ML - TensorFlow Lite
-  tflite_flutter: ^0.9.0
+  tflite_flutter: ^0.11.0
   image: ^4.2.0
   connectivity_plus: ^6.0.5
 
