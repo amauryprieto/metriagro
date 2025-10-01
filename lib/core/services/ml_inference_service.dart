@@ -98,44 +98,66 @@ class LocalTfliteInferenceService implements MlInferenceService {
     }
 
     final outputTensor = interpreter.getOutputTensors().first;
-    final numClasses = outputTensor.shape.last;
-    final output = [List.filled(numClasses, 0)];
-
-    interpreter.run(input, output);
-
+    final outputShape = outputTensor.shape; // [1, 300, 6] para detección
     final qOut = outputTensor.params;
     final isQuantOut = qOut.scale != 0.0;
 
-    late final List<double> logits;
-    if (isQuantOut) {
-      final scale = qOut.scale;
-      final zeroPoint = qOut.zeroPoint;
+    // Reservar buffer según la forma real del tensor de salida
+    dynamic output = List.generate(
+      outputShape[0], // 1
+      (_) => List.generate(
+        outputShape[1], // 300
+        (_) => List.filled(outputShape[2], isQuantOut ? 0 : 0.0), // 6
+      ),
+    );
 
-      logits = (output[0] as List).map<double>((e) => ((e as int) - zeroPoint) * scale).toList();
-    } else {
-      logits = (output[0] as List).map<double>((e) => (e as num).toDouble()).toList();
-    }
+    interpreter.run(input, output);
 
-    final maxLogit = logits.reduce(math.max);
-    final exps = logits.map((v) => math.exp(v - maxLogit)).toList();
-    final sumExp = exps.fold<double>(0, (a, b) => a + b);
-    final probs = exps.map((e) => e / sumExp).toList();
+    // Procesar detecciones: cada fila es [ymin, xmin, ymax, xmax, score, class_id]
+    final detections = <Map<String, dynamic>>[];
+    final detectionsList = output[0] as List<List<dynamic>>;
 
-    var argMax = 0;
-    var best = -1.0;
-    for (var i = 0; i < probs.length; i++) {
-      if (probs[i] > best) {
-        best = probs[i];
-        argMax = i;
+    for (final detection in detectionsList) {
+      if (detection.length >= 6) {
+        double score;
+        int classId;
+
+        if (isQuantOut) {
+          final scale = qOut.scale;
+          final zeroPoint = qOut.zeroPoint;
+          score = ((detection[4] as int) - zeroPoint) * scale;
+          classId = (detection[5] as int) - zeroPoint;
+        } else {
+          score = (detection[4] as num).toDouble();
+          classId = (detection[5] as num).round();
+        }
+
+        // Solo considerar detecciones con score > 0.5
+        if (score > 0.5) {
+          detections.add({
+            'ymin': detection[0],
+            'xmin': detection[1],
+            'ymax': detection[2],
+            'xmax': detection[3],
+            'score': score,
+            'classId': classId,
+          });
+        }
       }
     }
 
-    final label = (_labels != null && argMax < _labels!.length) ? _labels![argMax] : 'Clase $argMax';
+    // Encontrar la detección con mayor score
+    if (detections.isEmpty) {
+      return DiseaseDetectionResult(hasDisease: false, confidence: 0.0, diseaseName: 'healthy');
+    }
 
-    return DiseaseDetectionResult(
-      hasDisease: best > 0.5, // Threshold for disease detection
-      confidence: best,
-      diseaseName: label,
-    );
+    detections.sort((a, b) => (b['score'] as double).compareTo(a['score'] as double));
+    final bestDetection = detections.first;
+    final bestScore = bestDetection['score'] as double;
+    final classId = bestDetection['classId'] as int;
+
+    final label = (_labels != null && classId < _labels!.length) ? _labels![classId] : 'Clase $classId';
+
+    return DiseaseDetectionResult(hasDisease: bestScore > 0.5, confidence: bestScore, diseaseName: label);
   }
 }
