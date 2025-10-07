@@ -115,10 +115,6 @@ class _ConversationalConsultationPageState extends State<ConversationalConsultat
       ),
       actions: [
         IconButton(
-          icon: const Icon(Icons.home),
-          onPressed: () => Navigator.of(context).popUntil((route) => route.isFirst),
-        ),
-        IconButton(
           icon: const Icon(Icons.more_vert),
           onPressed: _showMenuOptions,
         ),
@@ -808,7 +804,21 @@ class _ConversationalConsultationPageState extends State<ConversationalConsultat
         padding: const EdgeInsets.all(24),
         child: Column(
           mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            Center(
+              child: Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(2)),
+              ),
+            ),
+            const SizedBox(height: 16),
+            const Text(
+              'Menú de Opciones',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: AppTheme.textPrimary),
+            ),
+            const SizedBox(height: 12),
             ListTile(
               leading: Icon(Icons.history, color: AppTheme.primaryColor),
               title: const Text('Ver historial'),
@@ -836,6 +846,7 @@ class _ConversationalConsultationPageState extends State<ConversationalConsultat
                 // TODO: Implementar compartir
               },
             ),
+            const SizedBox(height: 8),
           ],
         ),
       ),

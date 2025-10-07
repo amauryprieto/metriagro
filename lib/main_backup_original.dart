@@ -4,7 +4,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'core/theme/app_theme.dart';
 import 'core/firebase/firebase_options.dart';
 import 'core/firebase/firebase_analytics_config.dart';
-import 'features/consultation/presentation/pages/conversational_consultation_page.dart';
+import 'features/auth/presentation/pages/simple_welcome_page.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -34,7 +34,7 @@ class MetriagroApp extends StatelessWidget {
       theme: AppTheme.lightTheme,
       darkTheme: AppTheme.darkTheme,
       themeMode: ThemeMode.system,
-      home: const ConversationalConsultationPage(),
+      home: const SimpleWelcomePage(),
       debugShowCheckedModeBanner: false,
     );
   }

@@ -11,8 +11,6 @@ import 'package:metriagro/core/network/network_info.dart';
 import 'package:metriagro/core/services/ml_inference_service.dart';
 import 'package:metriagro/core/services/gcp_disease_api_service.dart';
 import 'package:metriagro/shared/models/disease_detection_result.dart';
-import 'package:metriagro/features/consultation/presentation/pages/minimal_consultation_page.dart';
-import 'package:metriagro/features/consultation/presentation/pages/card_based_consultation_page.dart';
 import 'package:metriagro/features/consultation/presentation/pages/conversational_consultation_page.dart';
 
 class HomePage extends StatefulWidget {
@@ -403,38 +401,14 @@ class _HomePageState extends State<HomePage> {
             ),
             const SizedBox(height: 16),
             const Text(
-              'Propuestas de Interfaz',
+              'Interfaz Principal',
               style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: AppTheme.textPrimary),
             ),
             const SizedBox(height: 12),
             ListTile(
-              leading: Icon(Icons.radio_button_checked, color: AppTheme.primaryColor),
-              title: const Text('Propuesta 1: Minimalista'),
-              subtitle: const Text('Centro de consultas con botón principal'),
-              onTap: () {
-                Navigator.pop(context);
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const MinimalConsultationPage()),
-                );
-              },
-            ),
-            ListTile(
-              leading: Icon(Icons.view_module, color: AppTheme.primaryColor),
-              title: const Text('Propuesta 2: Tarjetas'),
-              subtitle: const Text('Hub visual con categorías y acciones rápidas'),
-              onTap: () {
-                Navigator.pop(context);
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const CardBasedConsultationPage()),
-                );
-              },
-            ),
-            ListTile(
               leading: Icon(Icons.chat_bubble_outline, color: AppTheme.primaryColor),
-              title: const Text('Propuesta 3: Conversacional'),
-              subtitle: const Text('Asistente tipo chat con entrada multimodal'),
+              title: const Text('Asistente Conversacional'),
+              subtitle: const Text('Interfaz principal - Asistente tipo chat'),
               onTap: () {
                 Navigator.pop(context);
                 Navigator.push(
