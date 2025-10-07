@@ -90,15 +90,15 @@ class _ConversationalConsultationPageState extends State<ConversationalConsultat
       backgroundColor: AppTheme.primaryColor,
       foregroundColor: Colors.white,
       elevation: 0,
-      title: Row(
+      title: const Row(
         children: [
           CircleAvatar(
             backgroundColor: Colors.white,
             radius: 16,
             child: Icon(Icons.agriculture, color: AppTheme.primaryColor, size: 16),
           ),
-          const SizedBox(width: 12),
-          const Column(
+          SizedBox(width: 12),
+          Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
@@ -144,7 +144,6 @@ class _ConversationalConsultationPageState extends State<ConversationalConsultat
       case ChatMessageType.response:
         return _buildResponseMessage(message);
       case ChatMessageType.text:
-      default:
         return _buildTextMessage(message);
     }
   }
@@ -155,11 +154,11 @@ class _ConversationalConsultationPageState extends State<ConversationalConsultat
       child: Row(
         mainAxisAlignment: message.isUser ? MainAxisAlignment.end : MainAxisAlignment.start,
         children: [
-          if (!message.isUser) ...[
-            CircleAvatar(
+        if (!message.isUser) ...[
+            const CircleAvatar(
               backgroundColor: AppTheme.primaryColor,
               radius: 16,
-              child: const Icon(Icons.agriculture, color: Colors.white, size: 16),
+              child: Icon(Icons.agriculture, color: Colors.white, size: 16),
             ),
             const SizedBox(width: 8),
           ],
@@ -171,7 +170,7 @@ class _ConversationalConsultationPageState extends State<ConversationalConsultat
                 borderRadius: BorderRadius.circular(20),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.grey.withOpacity(0.1),
+                    color: Colors.grey.withValues(alpha: 0.1),
                     blurRadius: 5,
                     offset: const Offset(0, 2),
                   ),
@@ -219,16 +218,16 @@ class _ConversationalConsultationPageState extends State<ConversationalConsultat
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         gradient: LinearGradient(
-          colors: [AppTheme.primaryColor.withOpacity(0.1), Colors.white],
+          colors: [AppTheme.primaryColor.withValues(alpha: 0.1), Colors.white],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: AppTheme.primaryColor.withOpacity(0.2)),
+        border: Border.all(color: AppTheme.primaryColor.withValues(alpha: 0.2)),
       ),
       child: Column(
         children: [
-          Icon(Icons.agriculture, color: AppTheme.primaryColor, size: 40),
+          const Icon(Icons.agriculture, color: AppTheme.primaryColor, size: 40),
           const SizedBox(height: 12),
           Text(
             message.text,
@@ -255,15 +254,15 @@ class _ConversationalConsultationPageState extends State<ConversationalConsultat
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
+          const Row(
             children: [
               CircleAvatar(
                 backgroundColor: AppTheme.primaryColor,
                 radius: 16,
-                child: const Icon(Icons.agriculture, color: Colors.white, size: 16),
+                child: Icon(Icons.agriculture, color: Colors.white, size: 16),
               ),
-              const SizedBox(width: 8),
-              const Text(
+              SizedBox(width: 8),
+              Text(
                 'Opciones rápidas:',
                 style: TextStyle(
                   fontSize: 14,
@@ -294,10 +293,10 @@ class _ConversationalConsultationPageState extends State<ConversationalConsultat
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(25),
-          border: Border.all(color: AppTheme.primaryColor.withOpacity(0.3)),
+          border: Border.all(color: AppTheme.primaryColor.withValues(alpha: 0.3)),
           boxShadow: [
             BoxShadow(
-              color: Colors.grey.withOpacity(0.1),
+              color: Colors.grey.withValues(alpha: 0.1),
               blurRadius: 5,
               offset: const Offset(0, 2),
             ),
@@ -305,7 +304,7 @@ class _ConversationalConsultationPageState extends State<ConversationalConsultat
         ),
         child: Text(
           option,
-          style: TextStyle(
+          style: const TextStyle(
             color: AppTheme.primaryColor,
             fontSize: 14,
             fontWeight: FontWeight.w500,
@@ -321,11 +320,11 @@ class _ConversationalConsultationPageState extends State<ConversationalConsultat
       child: Row(
         mainAxisAlignment: message.isUser ? MainAxisAlignment.end : MainAxisAlignment.start,
         children: [
-          if (!message.isUser) ...[
-            CircleAvatar(
+        if (!message.isUser) ...[
+            const CircleAvatar(
               backgroundColor: AppTheme.primaryColor,
               radius: 16,
-              child: const Icon(Icons.agriculture, color: Colors.white, size: 16),
+              child: Icon(Icons.agriculture, color: Colors.white, size: 16),
             ),
             const SizedBox(width: 8),
           ],
@@ -337,7 +336,7 @@ class _ConversationalConsultationPageState extends State<ConversationalConsultat
               borderRadius: BorderRadius.circular(16),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.grey.withOpacity(0.1),
+                  color: Colors.grey.withValues(alpha: 0.1),
                   blurRadius: 5,
                   offset: const Offset(0, 2),
                 ),
@@ -384,7 +383,7 @@ class _ConversationalConsultationPageState extends State<ConversationalConsultat
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.grey.withOpacity(0.1),
+            color: Colors.grey.withValues(alpha: 0.1),
             blurRadius: 10,
             offset: const Offset(0, 3),
           ),
@@ -393,15 +392,15 @@ class _ConversationalConsultationPageState extends State<ConversationalConsultat
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
+          const Row(
             children: [
               CircleAvatar(
                 backgroundColor: AppTheme.primaryColor,
                 radius: 16,
-                child: const Icon(Icons.agriculture, color: Colors.white, size: 16),
+                child: Icon(Icons.agriculture, color: Colors.white, size: 16),
               ),
-              const SizedBox(width: 8),
-              const Text(
+              SizedBox(width: 8),
+              Text(
                 'Análisis completado',
                 style: TextStyle(
                   fontSize: 16,
@@ -470,17 +469,17 @@ class _ConversationalConsultationPageState extends State<ConversationalConsultat
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(
+                const Icon(
                   Icons.thumb_up,
                   size: 12,
-                  color: message.wasHelpful == true ? Colors.white : Colors.grey[600],
+                  color: Colors.green,
                 ),
                 const SizedBox(width: 4),
                 Text(
                   'Sí',
                   style: TextStyle(
                     fontSize: 11,
-                    color: message.wasHelpful == true ? Colors.white : Colors.grey[600],
+                    color: message.wasHelpful == true ? Colors.white : Colors.grey.shade600,
                   ),
                 ),
               ],
@@ -499,17 +498,17 @@ class _ConversationalConsultationPageState extends State<ConversationalConsultat
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(
+                const Icon(
                   Icons.thumb_down,
                   size: 12,
-                  color: message.wasHelpful == false ? Colors.white : Colors.grey[600],
+                  color: Colors.red,
                 ),
                 const SizedBox(width: 4),
                 Text(
                   'No',
                   style: TextStyle(
                     fontSize: 11,
-                    color: message.wasHelpful == false ? Colors.white : Colors.grey[600],
+                    color: message.wasHelpful == false ? Colors.white : Colors.grey.shade600,
                   ),
                 ),
               ],
@@ -527,7 +526,7 @@ class _ConversationalConsultationPageState extends State<ConversationalConsultat
         color: Colors.white,
         boxShadow: [
           BoxShadow(
-            color: Colors.grey.withOpacity(0.1),
+            color: Colors.grey.withValues(alpha: 0.1),
             blurRadius: 10,
             offset: const Offset(0, -2),
           ),
@@ -537,11 +536,11 @@ class _ConversationalConsultationPageState extends State<ConversationalConsultat
         child: Row(
           children: [
             IconButton(
-              icon: Icon(Icons.camera_alt, color: AppTheme.primaryColor),
+              icon: const Icon(Icons.camera_alt, color: AppTheme.primaryColor),
               onPressed: () => _showMediaOptions(),
             ),
             IconButton(
-              icon: Icon(Icons.mic, color: AppTheme.primaryColor),
+              icon: const Icon(Icons.mic, color: AppTheme.primaryColor),
               onPressed: () => _startVoiceRecording(),
             ),
             Expanded(
@@ -549,7 +548,7 @@ class _ConversationalConsultationPageState extends State<ConversationalConsultat
                 controller: _textController,
                 decoration: InputDecoration(
                   hintText: 'Escribe tu consulta...',
-                  hintStyle: TextStyle(color: Colors.grey[500]),
+                  hintStyle: const TextStyle(color: Colors.grey),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(25),
                     borderSide: BorderSide(color: Colors.grey[300]!),
@@ -560,7 +559,7 @@ class _ConversationalConsultationPageState extends State<ConversationalConsultat
                   ),
                   focusedBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(25),
-                    borderSide: BorderSide(color: AppTheme.primaryColor),
+                    borderSide: const BorderSide(color: AppTheme.primaryColor),
                   ),
                   contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
                 ),
@@ -573,7 +572,7 @@ class _ConversationalConsultationPageState extends State<ConversationalConsultat
               child: Container(
                 width: 40,
                 height: 40,
-                decoration: BoxDecoration(
+                decoration: const BoxDecoration(
                   color: AppTheme.primaryColor,
                   shape: BoxShape.circle,
                 ),
@@ -717,7 +716,7 @@ class _ConversationalConsultationPageState extends State<ConversationalConsultat
             width: 60,
             height: 60,
             decoration: BoxDecoration(
-              color: AppTheme.primaryColor.withOpacity(0.1),
+              color: AppTheme.primaryColor.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(16),
             ),
             child: Icon(icon, color: AppTheme.primaryColor, size: 30),
@@ -820,7 +819,7 @@ class _ConversationalConsultationPageState extends State<ConversationalConsultat
             ),
             const SizedBox(height: 12),
             ListTile(
-              leading: Icon(Icons.history, color: AppTheme.primaryColor),
+              leading: const Icon(Icons.history, color: AppTheme.primaryColor),
               title: const Text('Ver historial'),
               onTap: () {
                 Navigator.pop(context);
@@ -828,7 +827,7 @@ class _ConversationalConsultationPageState extends State<ConversationalConsultat
               },
             ),
             ListTile(
-              leading: Icon(Icons.refresh, color: AppTheme.primaryColor),
+              leading: const Icon(Icons.refresh, color: AppTheme.primaryColor),
               title: const Text('Nueva conversación'),
               onTap: () {
                 Navigator.pop(context);
@@ -839,7 +838,7 @@ class _ConversationalConsultationPageState extends State<ConversationalConsultat
               },
             ),
             ListTile(
-              leading: Icon(Icons.share, color: AppTheme.primaryColor),
+              leading: const Icon(Icons.share, color: AppTheme.primaryColor),
               title: const Text('Compartir conversación'),
               onTap: () {
                 Navigator.pop(context);
@@ -956,7 +955,7 @@ class ConversationHistoryPage extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.grey.withOpacity(0.1),
+            color: Colors.grey.withValues(alpha: 0.1),
             blurRadius: 5,
             offset: const Offset(0, 2),
           ),
@@ -968,9 +967,9 @@ class ConversationHistoryPage extends StatelessWidget {
           Row(
             children: [
               CircleAvatar(
-                backgroundColor: AppTheme.primaryColor.withOpacity(0.1),
-                radius: 16,
-                child: Icon(Icons.chat, color: AppTheme.primaryColor, size: 16),
+              backgroundColor: AppTheme.primaryColor.withValues(alpha: 0.1),
+              radius: 16,
+              child: const Icon(Icons.chat, color: AppTheme.primaryColor, size: 16),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -1009,12 +1008,12 @@ class ConversationHistoryPage extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
-                  color: AppTheme.primaryColor.withOpacity(0.1),
+                  color: AppTheme.primaryColor.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Text(
                   '$messageCount mensajes',
-                  style: TextStyle(
+                  style: const TextStyle(
                     fontSize: 11,
                     color: AppTheme.primaryColor,
                     fontWeight: FontWeight.w500,

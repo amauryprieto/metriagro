@@ -91,7 +91,7 @@ class _HomePageState extends State<HomePage> {
         children: [
           Row(
             children: [
-              Icon(Icons.trending_up, color: AppTheme.primaryColor, size: 24),
+              const Icon(Icons.trending_up, color: AppTheme.primaryColor, size: 24),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
@@ -107,7 +107,7 @@ class _HomePageState extends State<HomePage> {
                         // TODO: Navegar a página de planes/upgrade
                         _navigateToUpgradePage();
                       },
-                      child: Text(
+                      child: const Text(
                         '¿Necesitas más análisis?',
                         style: TextStyle(
                           fontSize: 14,
@@ -137,7 +137,7 @@ class _HomePageState extends State<HomePage> {
           color: AppTheme.primaryColor,
           shape: BoxShape.circle,
           boxShadow: [
-            BoxShadow(color: AppTheme.primaryColor.withOpacity(0.3), blurRadius: 20, offset: const Offset(0, 10)),
+            BoxShadow(color: AppTheme.primaryColor.withValues(alpha: 0.3), blurRadius: 20, offset: const Offset(0, 10)),
           ],
         ),
         child: _isLoading
@@ -182,11 +182,11 @@ class _HomePageState extends State<HomePage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
+          const Row(
             children: [
               Icon(Icons.info_outline, color: AppTheme.primaryColor, size: 20),
-              const SizedBox(width: 8),
-              const Text(
+              SizedBox(width: 8),
+              Text(
                 'Para obtener mejores resultados:',
                 style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: AppTheme.textPrimary),
               ),
@@ -212,7 +212,7 @@ class _HomePageState extends State<HomePage> {
             width: 6,
             height: 6,
             margin: const EdgeInsets.only(top: 6, right: 12),
-            decoration: BoxDecoration(color: AppTheme.primaryColor, shape: BoxShape.circle),
+            decoration: const BoxDecoration(color: AppTheme.primaryColor, shape: BoxShape.circle),
           ),
           Expanded(
             child: Text(text, style: const TextStyle(fontSize: 14, color: AppTheme.textSecondary, height: 1.4)),
@@ -281,9 +281,9 @@ class _HomePageState extends State<HomePage> {
       child: Container(
         padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
-          color: AppTheme.primaryColor.withOpacity(0.1),
+          color: AppTheme.primaryColor.withValues(alpha: 0.1),
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: AppTheme.primaryColor.withOpacity(0.3)),
+          border: Border.all(color: AppTheme.primaryColor.withValues(alpha: 0.3)),
         ),
         child: Column(
           children: [
@@ -309,12 +309,14 @@ class _HomePageState extends State<HomePage> {
       bool hasPermission = await _permissionService.requestImagePermission(source);
 
       if (!hasPermission) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Permisos necesarios para acceder a la cámara/galería'),
-            backgroundColor: AppTheme.errorColor,
-          ),
-        );
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Permisos necesarios para acceder a la cámara/galería'),
+              backgroundColor: AppTheme.errorColor,
+            ),
+          );
+        }
         return;
       }
 
@@ -336,8 +338,9 @@ class _HomePageState extends State<HomePage> {
           result = await _mlService.analyzeImage(file);
         }
 
-        await showDialog<void>(
-          context: context,
+        if (mounted) {
+          await showDialog<void>(
+            context: context,
           builder: (ctx) {
             return AlertDialog(
               title: const Text('Análisis completado'),
@@ -356,15 +359,18 @@ class _HomePageState extends State<HomePage> {
             );
           },
         );
+        }
 
         setState(() {
           _remainingQueries--;
         });
       }
     } catch (e) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Error al seleccionar imagen: $e'), backgroundColor: AppTheme.errorColor));
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error al seleccionar imagen: $e'), backgroundColor: AppTheme.errorColor));
+      }
     } finally {
       setState(() {
         _isLoading = false;
@@ -406,7 +412,7 @@ class _HomePageState extends State<HomePage> {
             ),
             const SizedBox(height: 12),
             ListTile(
-              leading: Icon(Icons.chat_bubble_outline, color: AppTheme.primaryColor),
+              leading: const Icon(Icons.chat_bubble_outline, color: AppTheme.primaryColor),
               title: const Text('Asistente Conversacional'),
               subtitle: const Text('Interfaz principal - Asistente tipo chat'),
               onTap: () {
