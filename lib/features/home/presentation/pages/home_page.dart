@@ -11,6 +11,9 @@ import 'package:metriagro/core/network/network_info.dart';
 import 'package:metriagro/core/services/ml_inference_service.dart';
 import 'package:metriagro/core/services/gcp_disease_api_service.dart';
 import 'package:metriagro/shared/models/disease_detection_result.dart';
+import 'package:metriagro/features/consultation/presentation/pages/minimal_consultation_page.dart';
+import 'package:metriagro/features/consultation/presentation/pages/card_based_consultation_page.dart';
+import 'package:metriagro/features/consultation/presentation/pages/conversational_consultation_page.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -70,10 +73,8 @@ class _HomePageState extends State<HomePage> {
       centerTitle: true,
       actions: [
         IconButton(
-          icon: const Icon(Icons.more_vert, color: Colors.white),
-          onPressed: () {
-            // TODO: Implementar menú de opciones
-          },
+          icon: const Icon(Icons.menu, color: Colors.white),
+          onPressed: _showProposalsMenu,
         ),
       ],
     );
@@ -377,6 +378,75 @@ class _HomePageState extends State<HomePage> {
     // TODO: Implementar navegación a página de planes/upgrade
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('Próximamente: Página de planes y upgrade'), backgroundColor: AppTheme.primaryColor),
+    );
+  }
+
+  void _showProposalsMenu() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) => Container(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(2)),
+              ),
+            ),
+            const SizedBox(height: 16),
+            const Text(
+              'Propuestas de Interfaz',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: AppTheme.textPrimary),
+            ),
+            const SizedBox(height: 12),
+            ListTile(
+              leading: Icon(Icons.radio_button_checked, color: AppTheme.primaryColor),
+              title: const Text('Propuesta 1: Minimalista'),
+              subtitle: const Text('Centro de consultas con botón principal'),
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const MinimalConsultationPage()),
+                );
+              },
+            ),
+            ListTile(
+              leading: Icon(Icons.view_module, color: AppTheme.primaryColor),
+              title: const Text('Propuesta 2: Tarjetas'),
+              subtitle: const Text('Hub visual con categorías y acciones rápidas'),
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const CardBasedConsultationPage()),
+                );
+              },
+            ),
+            ListTile(
+              leading: Icon(Icons.chat_bubble_outline, color: AppTheme.primaryColor),
+              title: const Text('Propuesta 3: Conversacional'),
+              subtitle: const Text('Asistente tipo chat con entrada multimodal'),
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const ConversationalConsultationPage()),
+                );
+              },
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
     );
   }
 }
