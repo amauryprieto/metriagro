@@ -38,7 +38,7 @@ class ConversationBloc extends Bloc<ConversationEvent, ConversationState> {
   }
 
   Future<void> _onSubmitted(ConversationSubmitted event, Emitter<ConversationState> emit) async {
-    emit(state.copyWith(status: ConversationStatus.processing));
+    emit(state.copyWith(status: ConversationStatus.processing, progressMessage: 'Iniciando análisis...'));
     try {
       // Guardar mensaje del usuario
       final cid = _conversationId ??= await _history.createConversation(title: 'Nueva conversación');
@@ -51,8 +51,27 @@ class ConversationBloc extends Bloc<ConversationEvent, ConversationState> {
         type: event.request.hasImage ? 'media' : 'text',
       );
 
+      // 1. Transcribir audio si existe
+      if (event.request.hasAudio) {
+        emit(state.copyWith(status: ConversationStatus.processing, progressMessage: '🔄 Transcribiendo audio...'));
+      }
+
+      // 2. Analizar imagen
+      if (event.request.hasImage) {
+        emit(state.copyWith(status: ConversationStatus.analyzing, progressMessage: '🔍 Analizando tu foto...'));
+      }
+
+      // 3. Buscar tratamiento
+      emit(
+        state.copyWith(status: ConversationStatus.searchingTreatment, progressMessage: '📚 Buscando tratamiento...'),
+      );
+
+      // 4. Validar resultados
+      emit(state.copyWith(status: ConversationStatus.validating, progressMessage: '✅ Validando resultados...'));
+
       final response = await _engine.processConversation(event.request);
       emit(state.copyWith(status: ConversationStatus.success, lastResponse: response));
+
       // Guardar respuesta del asistente
       await _history.addMessage(
         conversationId: cid,

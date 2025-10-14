@@ -8,6 +8,8 @@ abstract class LocalKnowledgeBase {
   Future<void> initialize();
   Future<bool> isReady();
   Future<TreatmentInfo?> getTreatment(String diseaseId);
+  Future<List<DiseaseInfo>> searchDiseasesByKeywords(String keywords, {String? cropType});
+  Future<List<TreatmentInfo>> getTreatmentsForDiseases(List<String> diseaseIds);
   Future<void> dispose();
 }
 
@@ -131,8 +133,94 @@ class SqliteKnowledgeBase implements LocalKnowledgeBase {
   }
 
   @override
+  Future<List<DiseaseInfo>> searchDiseasesByKeywords(String keywords, {String? cropType}) async {
+    final db = _db;
+    if (db == null) return [];
+
+    // Dividir keywords en palabras individuales para búsqueda más flexible
+    final words = keywords.toLowerCase().split(RegExp(r'\s+')).where((w) => w.isNotEmpty).toList();
+    if (words.isEmpty) return [];
+
+    // Construir query con LIKE para cada palabra
+    final conditions = <String>[];
+    final args = <dynamic>[];
+
+    for (final word in words) {
+      conditions.add('LOWER(keywords) LIKE ?');
+      args.add('%$word%');
+    }
+
+    String whereClause = conditions.join(' AND ');
+    if (cropType != null) {
+      whereClause += ' AND crop_type = ?';
+      args.add(cropType);
+    }
+
+    final rows = await db.query('diseases', where: whereClause, whereArgs: args, orderBy: 'name ASC');
+
+    return rows.map((row) {
+      final cropTypeStr = row['crop_type'] as String;
+      CropType cropTypeEnum;
+      switch (cropTypeStr) {
+        case 'cacao':
+          cropTypeEnum = CropType.cacao;
+          break;
+        case 'cafe':
+          cropTypeEnum = CropType.cafe;
+          break;
+        case 'platano':
+          cropTypeEnum = CropType.platano;
+          break;
+        case 'maiz':
+          cropTypeEnum = CropType.maiz;
+          break;
+        default:
+          cropTypeEnum = CropType.unknown;
+      }
+
+      return DiseaseInfo(
+        id: row['id'] as String,
+        name: row['name'] as String,
+        cropType: cropTypeEnum,
+        summary: row['summary'] as String?,
+      );
+    }).toList();
+  }
+
+  @override
+  Future<List<TreatmentInfo>> getTreatmentsForDiseases(List<String> diseaseIds) async {
+    final db = _db;
+    if (db == null || diseaseIds.isEmpty) return [];
+
+    final placeholders = diseaseIds.map((_) => '?').join(',');
+    final rows = await db.query(
+      'treatments',
+      where: 'disease_id IN ($placeholders)',
+      whereArgs: diseaseIds,
+      orderBy: 'title ASC',
+    );
+
+    return rows.map((row) {
+      final products = (row['products_json'] as String?) != null
+          ? List<String>.from(jsonDecode(row['products_json'] as String))
+          : <String>[];
+      final steps = (row['steps_json'] as String?) != null
+          ? List<String>.from(jsonDecode(row['steps_json'] as String))
+          : <String>[];
+
+      return TreatmentInfo(
+        treatmentId: row['id'] as String,
+        title: row['title'] as String,
+        description: row['description'] as String,
+        products: products,
+        steps: steps,
+        additionalInfo: row['references'] != null ? {'references': row['references'] as String} : null,
+      );
+    }).toList();
+  }
+
+  @override
   Future<void> dispose() async {
     await _db?.close();
   }
 }
-

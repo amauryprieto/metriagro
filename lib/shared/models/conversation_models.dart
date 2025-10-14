@@ -10,19 +10,13 @@ enum InputType {
 }
 
 /// Tipo de cultivo detectado
-enum CropType {
-  cacao,
-  cafe,
-  platano,
-  maiz,
-  unknown,
-}
+enum CropType { cacao, cafe, platano, maiz, unknown }
 
 /// Nivel de confianza en la detección
 enum ConfidenceLevel {
-  high,    // > 90%
-  medium,  // 70-90%
-  low,     // 50-70%
+  high, // > 90%
+  medium, // 70-90%
+  low, // 50-70%
   unknown, // < 50%
 }
 
@@ -33,7 +27,7 @@ class ConversationRequest extends Equatable {
   final Uint8List? imageData;
   final InputType inputType;
   final CropType? expectedCropType; // Hint del usuario sobre el cultivo
-  
+
   const ConversationRequest({
     this.textInput,
     this.audioData,
@@ -48,13 +42,7 @@ class ConversationRequest extends Equatable {
   bool get isMultimodal => hasImage && (hasText || hasAudio);
 
   @override
-  List<Object?> get props => [
-    textInput,
-    audioData,
-    imageData,
-    inputType,
-    expectedCropType,
-  ];
+  List<Object?> get props => [textInput, audioData, imageData, inputType, expectedCropType];
 }
 
 /// Resultado de clasificación de imagen
@@ -76,14 +64,20 @@ class VisionResult extends Equatable {
   });
 
   @override
-  List<Object?> get props => [
-    diseaseId,
-    diseaseName,
-    cropType,
-    confidence,
-    confidenceLevel,
-    metadata,
-  ];
+  List<Object?> get props => [diseaseId, diseaseName, cropType, confidence, confidenceLevel, metadata];
+}
+
+/// Información de una enfermedad para búsqueda semántica
+class DiseaseInfo extends Equatable {
+  final String id;
+  final String name;
+  final CropType cropType;
+  final String? summary;
+
+  const DiseaseInfo({required this.id, required this.name, required this.cropType, this.summary});
+
+  @override
+  List<Object?> get props => [id, name, cropType, summary];
 }
 
 /// Información de tratamiento de una enfermedad
@@ -105,14 +99,7 @@ class TreatmentInfo extends Equatable {
   });
 
   @override
-  List<Object?> get props => [
-    treatmentId,
-    title,
-    description,
-    products,
-    steps,
-    additionalInfo,
-  ];
+  List<Object?> get props => [treatmentId, title, description, products, steps, additionalInfo];
 }
 
 /// Respuesta unificada del sistema conversacional
@@ -123,6 +110,10 @@ class ConversationResponse extends Equatable {
   final bool isFromOnlineService;
   final DateTime timestamp;
   final Map<String, dynamic>? debugInfo;
+  final List<TreatmentInfo>? alternativeTreatments;
+  final CropType? detectedCropTypeHint;
+  final bool hasContextMismatch;
+  final String? userContext;
 
   const ConversationResponse({
     required this.responseText,
@@ -131,6 +122,10 @@ class ConversationResponse extends Equatable {
     required this.isFromOnlineService,
     required this.timestamp,
     this.debugInfo,
+    this.alternativeTreatments,
+    this.detectedCropTypeHint,
+    this.hasContextMismatch = false,
+    this.userContext,
   });
 
   @override
@@ -141,6 +136,10 @@ class ConversationResponse extends Equatable {
     isFromOnlineService,
     timestamp,
     debugInfo,
+    alternativeTreatments,
+    detectedCropTypeHint,
+    hasContextMismatch,
+    userContext,
   ];
 }
 
@@ -150,11 +149,7 @@ class ConversationError extends Equatable {
   final String? errorCode;
   final Exception? originalError;
 
-  const ConversationError({
-    required this.message,
-    this.errorCode,
-    this.originalError,
-  });
+  const ConversationError({required this.message, this.errorCode, this.originalError});
 
   @override
   List<Object?> get props => [message, errorCode, originalError];

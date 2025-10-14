@@ -190,33 +190,75 @@ class OfflineConversationService implements ConversationEngine {
     String? transcribedText = request.textInput;
     VisionResult? visionResult;
     TreatmentInfo? treatmentInfo;
+    List<TreatmentInfo> alternativeTreatments = [];
+    CropType? extractedHint;
+    bool hasContextMismatch = false;
 
     // 1. Transcribir audio si existe
     if (request.hasAudio && _audioTranscriber != null) {
       transcribedText = await _audioTranscriber.transcribe(request.audioData!);
     }
 
-    // 2. Procesar imagen si existe
-    if (request.hasImage) {
-      visionResult = await _visionRouter.classify(request.imageData!, request.expectedCropType);
+    // 2. Extraer hint de cultivo del texto/audio
+    if (transcribedText != null && transcribedText.isNotEmpty) {
+      extractedHint = _extractCropTypeHint(transcribedText);
     }
 
-    // 3. Buscar tratamiento en BD local
+    // 3. Combinar hint extraído con expectedCropType (priorizar selector manual)
+    CropType? finalCropType = request.expectedCropType ?? extractedHint;
+
+    // 4. Procesar imagen si existe
+    if (request.hasImage) {
+      visionResult = await _visionRouter.classify(request.imageData!, finalCropType);
+    }
+
+    // 5. Buscar tratamiento principal en BD local
     if (visionResult != null) {
       treatmentInfo = await _localKB.getTreatment(visionResult.diseaseId);
     }
 
-    // 4. Generar respuesta
+    // 6. Búsqueda semántica y validación cruzada
+    if (transcribedText != null && transcribedText.isNotEmpty) {
+      // Validación cruzada
+      hasContextMismatch =
+          extractedHint != null && extractedHint != visionResult?.cropType && extractedHint != CropType.unknown;
+
+      if (hasContextMismatch) {
+        // Si hay mismatch, buscar también con el hint del usuario
+        final altDiseases = await _localKB.searchDiseasesByKeywords(
+          transcribedText,
+          cropType: extractedHint.toString().split('.').last,
+        );
+        alternativeTreatments = await _localKB.getTreatmentsForDiseases(altDiseases.map((d) => d.id).toList());
+      } else if (visionResult != null) {
+        // Búsqueda semántica normal
+        final diseases = await _localKB.searchDiseasesByKeywords(
+          transcribedText,
+          cropType: visionResult.cropType.toString().split('.').last,
+        );
+        alternativeTreatments = await _localKB.getTreatmentsForDiseases(diseases.map((d) => d.id).toList());
+      }
+    }
+
+    // 7. Generar respuesta
     final responseText = _generateResponse(
       text: transcribedText,
       visionResult: visionResult,
       treatmentInfo: treatmentInfo,
+      userContext: transcribedText,
+      extractedHint: extractedHint,
+      alternatives: alternativeTreatments,
+      hasContextMismatch: hasContextMismatch,
     );
 
     return ConversationResponse(
       responseText: responseText,
       visionResult: visionResult,
       treatmentInfo: treatmentInfo,
+      alternativeTreatments: alternativeTreatments.isNotEmpty ? alternativeTreatments : null,
+      detectedCropTypeHint: extractedHint,
+      hasContextMismatch: hasContextMismatch,
+      userContext: transcribedText,
       isFromOnlineService: false,
       timestamp: DateTime.now(),
       debugInfo: {
@@ -224,37 +266,128 @@ class OfflineConversationService implements ConversationEngine {
         'hasAudio': request.hasAudio,
         'hasImage': request.hasImage,
         'transcribedText': transcribedText,
+        'extractedHint': extractedHint?.toString(),
+        'hasContextMismatch': hasContextMismatch,
       },
     );
   }
 
-  String _generateResponse({String? text, VisionResult? visionResult, TreatmentInfo? treatmentInfo}) {
-    if (visionResult != null && treatmentInfo != null) {
-      return '''
-🔍 **Análisis completado**
+  /// Extrae hint de tipo de cultivo del texto del usuario
+  CropType? _extractCropTypeHint(String? text) {
+    if (text == null || text.isEmpty) return null;
 
-📱 Enfermedad detectada: **${visionResult.diseaseName}**
-🌱 Cultivo: ${_cropTypeToString(visionResult.cropType)}
-📊 Confianza: ${(visionResult.confidence * 100).toStringAsFixed(1)}%
+    final lowerText = text.toLowerCase();
 
-💊 **Tratamiento recomendado:**
-${treatmentInfo.description}
-
-🛠 **Pasos a seguir:**
-${treatmentInfo.steps.map((step) => '• $step').join('\n')}
-''';
+    // Keywords para cacao
+    if (lowerText.contains('cacao') || lowerText.contains('cacaotal')) {
+      return CropType.cacao;
     }
 
+    // Keywords para café
+    if (lowerText.contains('café') || lowerText.contains('cafe') || lowerText.contains('cafetal')) {
+      return CropType.cafe;
+    }
+
+    // Keywords para plátano
+    if (lowerText.contains('plátano') ||
+        lowerText.contains('platano') ||
+        lowerText.contains('platanera') ||
+        lowerText.contains('banano')) {
+      return CropType.platano;
+    }
+
+    // Keywords para maíz
+    if (lowerText.contains('maíz') || lowerText.contains('maiz') || lowerText.contains('maizal')) {
+      return CropType.maiz;
+    }
+
+    return null;
+  }
+
+  String _generateResponse({
+    String? text,
+    VisionResult? visionResult,
+    TreatmentInfo? treatmentInfo,
+    String? userContext,
+    CropType? extractedHint,
+    List<TreatmentInfo>? alternatives,
+    bool hasContextMismatch = false,
+  }) {
+    final buffer = StringBuffer();
+
+    // Encabezado
+    buffer.writeln('🔍 **Análisis completado**');
+    buffer.writeln();
+
+    // Contexto del usuario
+    if (userContext != null && userContext.isNotEmpty) {
+      buffer.writeln('📝 Tu descripción: "$userContext"');
+      buffer.writeln();
+    }
+
+    // Validación cruzada
+    if (hasContextMismatch && extractedHint != null && visionResult != null) {
+      buffer.writeln('⚠️ **Nota importante:**');
+      buffer.writeln(
+        'Mencionaste "${_cropTypeToString(extractedHint)}" pero la imagen parece ser "${_cropTypeToString(visionResult.cropType)}"',
+      );
+      buffer.writeln('¿Quieres que analice como "${_cropTypeToString(extractedHint)}" en su lugar?');
+      buffer.writeln();
+    } else if (extractedHint != null && visionResult != null && extractedHint == visionResult.cropType) {
+      buffer.writeln('✅ Confirmado: Cultivo de ${_cropTypeToString(visionResult.cropType)} detectado');
+      buffer.writeln();
+    }
+
+    // Resultado principal
     if (visionResult != null) {
-      return '''
-🔍 Detecté: **${visionResult.diseaseName}**
-📊 Confianza: ${(visionResult.confidence * 100).toStringAsFixed(1)}%
+      // Verificar si hay enfermedad presente
+      final hasDisease = visionResult.metadata?['hasDisease'] as bool? ?? false;
 
-⚠️ No encontré información de tratamiento en la base de datos local.
-''';
+      if (hasDisease) {
+        buffer.writeln('🚨 **ENFERMEDAD DETECTADA**');
+        buffer.writeln('📱 Nombre: **${visionResult.diseaseName}**');
+        buffer.writeln('🌱 Cultivo: ${_cropTypeToString(visionResult.cropType)}');
+        buffer.writeln('📊 Confianza: ${(visionResult.confidence * 100).toStringAsFixed(1)}%');
+        buffer.writeln();
+
+        // Tratamiento principal
+        if (treatmentInfo != null) {
+          buffer.writeln('💊 **Tratamiento recomendado:**');
+          buffer.writeln(treatmentInfo.description);
+          buffer.writeln();
+          buffer.writeln('🛠 **Pasos a seguir:**');
+          for (final step in treatmentInfo.steps) {
+            buffer.writeln('• $step');
+          }
+          buffer.writeln();
+        } else {
+          buffer.writeln('⚠️ No encontré información de tratamiento en la base de datos local.');
+          buffer.writeln();
+        }
+      } else {
+        buffer.writeln('✅ **SIN ENFERMEDAD DETECTADA**');
+        buffer.writeln('🌱 Cultivo: ${_cropTypeToString(visionResult.cropType)}');
+        buffer.writeln('📊 Confianza: ${(visionResult.confidence * 100).toStringAsFixed(1)}%');
+        buffer.writeln();
+        buffer.writeln('🎉 Tu cultivo parece estar saludable. Continúa con el cuidado preventivo.');
+        buffer.writeln();
+      }
+    } else {
+      buffer.writeln('🤖 Procesé tu consulta offline pero necesito más información.');
+      buffer.writeln();
     }
 
-    return '🤖 Procesé tu consulta offline pero necesito más información.';
+    // Tratamientos alternativos
+    if (alternatives != null && alternatives.isNotEmpty) {
+      buffer.writeln('🔗 **También encontré** (basado en tu descripción):');
+      for (final alt in alternatives.take(3)) {
+        // Limitar a 3 alternativas
+        buffer.writeln('• ${alt.title}');
+      }
+      buffer.writeln();
+    }
+
+    return buffer.toString().trim();
   }
 
   String _cropTypeToString(CropType cropType) {

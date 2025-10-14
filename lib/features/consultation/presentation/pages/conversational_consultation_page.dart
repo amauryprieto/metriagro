@@ -6,6 +6,7 @@ import '../../../conversation/presentation/bloc/conversation_bloc.dart';
 import '../../../conversation/domain/conversation_engine.dart';
 import '../../../../shared/models/conversation_models.dart';
 import '../../../../shared/services/tts_speaker.dart';
+import '../../../../shared/services/whisper_transcriber.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:typed_data';
 import '../../../../shared/services/history_storage.dart';
@@ -91,11 +92,53 @@ class _ConversationalConsultationPageState extends State<ConversationalConsultat
         appBar: _buildAppBar(),
         body: BlocListener<ConversationBloc, ConversationState>(
           listener: (context, state) {
+            // Manejar estados progresivos
+            if (state.status == ConversationStatus.analyzing ||
+                state.status == ConversationStatus.searchingTreatment ||
+                state.status == ConversationStatus.validating ||
+                state.status == ConversationStatus.processing) {
+              if (state.progressMessage != null) {
+                setState(() {
+                  // Remover mensaje de progreso anterior si existe
+                  _messages.removeWhere((msg) => msg.messageType == ChatMessageType.progress);
+                  _messages.add(
+                    ChatMessage(
+                      text: state.progressMessage!,
+                      isUser: false,
+                      timestamp: DateTime.now(),
+                      messageType: ChatMessageType.progress,
+                    ),
+                  );
+                });
+                _scrollToBottom();
+              }
+            }
+
+            // Manejar respuesta final
             if (state.status == ConversationStatus.success && state.lastResponse != null) {
               setState(() {
+                // Remover mensaje de progreso
+                _messages.removeWhere((msg) => msg.messageType == ChatMessageType.progress);
                 _messages.add(
                   ChatMessage(
                     text: state.lastResponse!.responseText,
+                    isUser: false,
+                    timestamp: DateTime.now(),
+                    messageType: ChatMessageType.text,
+                  ),
+                );
+              });
+              _scrollToBottom();
+            }
+
+            // Manejar errores
+            if (state.status == ConversationStatus.error) {
+              setState(() {
+                // Remover mensaje de progreso
+                _messages.removeWhere((msg) => msg.messageType == ChatMessageType.progress);
+                _messages.add(
+                  ChatMessage(
+                    text: '❌ Error: ${state.errorMessage ?? "Ocurrió un error inesperado"}',
                     isUser: false,
                     timestamp: DateTime.now(),
                     messageType: ChatMessageType.text,
@@ -163,6 +206,8 @@ class _ConversationalConsultationPageState extends State<ConversationalConsultat
         return _buildMediaMessage(message);
       case ChatMessageType.response:
         return _buildResponseMessage(message);
+      case ChatMessageType.progress:
+        return _buildProgressMessage(message);
       case ChatMessageType.text:
         return _buildTextMessage(message);
     }
@@ -220,6 +265,48 @@ class _ConversationalConsultationPageState extends State<ConversationalConsultat
               child: Icon(Icons.person, color: Colors.grey[600], size: 16),
             ),
           ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildProgressMessage(ChatMessage message) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.start,
+        children: [
+          const CircleAvatar(
+            backgroundColor: AppTheme.primaryColor,
+            radius: 16,
+            child: Icon(Icons.agriculture, color: Colors.white, size: 16),
+          ),
+          const SizedBox(width: 8),
+          Flexible(
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              decoration: BoxDecoration(
+                color: Colors.blue[50],
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: Colors.blue[200]!),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      valueColor: AlwaysStoppedAnimation<Color>(AppTheme.primaryColor),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Text(message.text, style: const TextStyle(color: AppTheme.textPrimary, fontSize: 15, height: 1.4)),
+                ],
+              ),
+            ),
+          ),
         ],
       ),
     );
@@ -734,10 +821,170 @@ class _ConversationalConsultationPageState extends State<ConversationalConsultat
     if (picked == null) return;
     final Uint8List bytes = await picked.readAsBytes();
 
+    // Mostrar modal multimodal inmediatamente después de capturar
+    _showMultimodalCaptureModal(bytes);
+  }
+
+  void _showMultimodalCaptureModal(Uint8List imageBytes) {
+    final TextEditingController textController = TextEditingController();
+    bool isRecording = false;
+    final WhisperTranscriber transcriber = SpeechToTextWhisperTranscriber();
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setModalState) => Container(
+          height: MediaQuery.of(context).size.height * 0.85,
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+          ),
+          child: Column(
+            children: [
+              // Handle
+              Container(
+                margin: const EdgeInsets.only(top: 12),
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(2)),
+              ),
+
+              // Header
+              Padding(
+                padding: const EdgeInsets.all(20),
+                child: Row(
+                  children: [
+                    const Icon(Icons.camera_alt, color: AppTheme.primaryColor),
+                    const SizedBox(width: 12),
+                    const Expanded(
+                      child: Text('Completa tu consulta', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                    ),
+                    IconButton(onPressed: () => Navigator.pop(context), icon: const Icon(Icons.close)),
+                  ],
+                ),
+              ),
+
+              // Image preview
+              Container(
+                margin: const EdgeInsets.symmetric(horizontal: 20),
+                height: 200,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.grey[300]!),
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: Image.memory(imageBytes, fit: BoxFit.cover, width: double.infinity),
+                ),
+              ),
+
+              const SizedBox(height: 20),
+
+              // Text input with audio button
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: textController,
+                        maxLines: 3,
+                        decoration: InputDecoration(
+                          hintText: 'Describe qué ves o qué te preocupa...',
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                          prefixIcon: const Icon(Icons.text_fields),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    ElevatedButton.icon(
+                      onPressed: () async {
+                        if (isRecording) {
+                          // Detener grabación y transcribir
+                          setModalState(() {
+                            isRecording = false;
+                          });
+
+                          try {
+                            // Inicializar transcriber si no está inicializado
+                            await transcriber.initialize();
+
+                            // Simular datos de audio (en implementación real, estos vendrían del micrófono)
+                            final audioData = Uint8List.fromList([1, 2, 3, 4, 5]); // Datos simulados
+
+                            // Mostrar indicador de transcripción
+                            setModalState(() {
+                              textController.text = "Transcribiendo audio...";
+                            });
+
+                            // Transcribir con Whisper
+                            final result = await transcriber.transcribe(audioData);
+
+                            setModalState(() {
+                              textController.text = result;
+                            });
+                          } catch (e) {
+                            setModalState(() {
+                              textController.text = "Error en transcripción: $e";
+                            });
+                          }
+                        } else {
+                          // Iniciar grabación
+                          setModalState(() {
+                            isRecording = true;
+                            textController.clear();
+                          });
+                          // Aquí se iniciaría la grabación de audio real
+                        }
+                      },
+                      icon: Icon(isRecording ? Icons.stop : Icons.mic),
+                      label: Text(isRecording ? 'Detener' : 'Audio'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: isRecording ? Colors.red : AppTheme.primaryColor,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              const Spacer(),
+
+              // Action button
+              Padding(
+                padding: const EdgeInsets.all(20),
+                child: SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: () {
+                      Navigator.pop(context);
+                      _sendMultimodalRequest(imageBytes, textController.text.trim(), null);
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppTheme.primaryColor,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    child: const Text('Enviar consulta', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _sendMultimodalRequest(Uint8List imageBytes, String text, CropType? cropType) {
     setState(() {
       _messages.add(
         ChatMessage(
-          text: 'Imagen compartida',
+          text: text.isNotEmpty ? text : 'Imagen compartida',
           isUser: true,
           timestamp: DateTime.now(),
           messageType: ChatMessageType.media,
@@ -747,11 +994,15 @@ class _ConversationalConsultationPageState extends State<ConversationalConsultat
     });
     _scrollToBottom();
 
-    // Enviar imagen al motor conversacional (offline/online)
     if (mounted) {
       context.read<ConversationBloc>().add(
         ConversationSubmitted(
-          ConversationRequest(imageData: bytes, inputType: InputType.image, expectedCropType: CropType.cacao),
+          ConversationRequest(
+            imageData: imageBytes,
+            textInput: text.isNotEmpty ? text : null,
+            inputType: text.isNotEmpty ? InputType.multimodal : InputType.image,
+            expectedCropType: null, // El sistema detectará automáticamente el tipo de cultivo del texto
+          ),
         ),
       );
     }
@@ -864,7 +1115,7 @@ class _ConversationalConsultationPageState extends State<ConversationalConsultat
 }
 
 // Modelos de datos
-enum ChatMessageType { text, welcome, quickOptions, media, response }
+enum ChatMessageType { text, welcome, quickOptions, media, response, progress }
 
 class ChatMessage {
   final String text;
