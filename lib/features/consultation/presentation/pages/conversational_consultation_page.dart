@@ -602,7 +602,7 @@ class _ConversationalConsultationPageState extends State<ConversationalConsultat
         if (option.contains('Diagnosticar') || option.contains('Identificar')) {
           _messages.add(
             ChatMessage(
-              text: 'Para ayudarte mejor, ¿puedes compartir una foto o video de tu cultivo?',
+              text: 'Para ayudarte mejor, ¿puedes compartir una foto de tu cultivo?',
               isUser: false,
               timestamp: DateTime.now(),
               messageType: ChatMessageType.text,
@@ -690,14 +690,13 @@ class _ConversationalConsultationPageState extends State<ConversationalConsultat
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Text('Compartir multimedia', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            const Text('Compartir imagen', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
             const SizedBox(height: 20),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: [
                 _buildMediaOption('Cámara', Icons.camera_alt, () => _captureMedia('camera')),
                 _buildMediaOption('Galería', Icons.photo_library, () => _captureMedia('gallery')),
-                _buildMediaOption('Video', Icons.videocam, () => _captureMedia('video')),
               ],
             ),
             const SizedBox(height: 20),
@@ -730,11 +729,6 @@ class _ConversationalConsultationPageState extends State<ConversationalConsultat
 
   Future<void> _captureMedia(String type) async {
     Navigator.pop(context);
-    if (type == 'video') {
-      // No soportado en MVP
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Video no soportado en este MVP')));
-      return;
-    }
     final picker = ImagePicker();
     final XFile? picked = await picker.pickImage(source: type == 'camera' ? ImageSource.camera : ImageSource.gallery);
     if (picked == null) return;
