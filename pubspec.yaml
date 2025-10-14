@@ -36,22 +36,22 @@ dependencies:
   cupertino_icons: ^1.0.8
 
   # BLoC Architecture
-  flutter_bloc: ^8.1.6
-  bloc: ^8.1.4
+  flutter_bloc: ^9.1.1
+  bloc: ^9.0.1
   equatable: ^2.0.5
 
   # Firebase
-  firebase_core: ^3.6.0
-  firebase_auth: ^5.3.1
-  cloud_firestore: ^5.4.3
-  firebase_storage: ^12.3.2
-  firebase_analytics: ^11.3.3
-  firebase_crashlytics: ^4.1.3
-  firebase_messaging: ^15.1.3
-  cloud_functions: ^5.1.3
+  firebase_core: ^4.2.0
+  firebase_auth: ^6.1.1
+  cloud_firestore: ^6.0.3
+  firebase_storage: ^13.0.3
+  firebase_analytics: ^12.0.3
+  firebase_crashlytics: ^5.0.3
+  firebase_messaging: ^16.0.3
+  cloud_functions: ^6.0.3
 
   # Google Sign-In
-  google_sign_in: ^6.2.1
+  google_sign_in: ^7.2.0
 
   # Phone Auth
   pinput: ^5.0.2
@@ -62,7 +62,7 @@ dependencies:
   # ML - TensorFlow Lite
   tflite_flutter: ^0.11.0
   image: ^4.2.0
-  connectivity_plus: ^6.0.5
+  connectivity_plus: ^7.0.0
 
   # HTTP & Networking
   http: ^1.2.2
@@ -78,12 +78,24 @@ dependencies:
   injectable: ^2.5.0
   json_annotation: ^4.9.0
   freezed_annotation: ^2.4.4
-  intl: ^0.19.0
+  intl: ^0.20.2
 
   # UI
   cached_network_image: ^3.4.1
   image_picker: ^1.1.2
-  permission_handler: ^11.3.1
+  permission_handler: ^12.0.1
+
+  # Voice Recognition & Audio
+  speech_to_text: ^7.0.0
+  flutter_tts: ^4.2.0
+  avatar_glow: ^3.0.1
+
+  # Local Database
+  sqflite: ^2.3.3+2
+  path: ^1.9.0
+
+  # Natural Language Processing
+  string_similarity: ^2.0.0
 
 dev_dependencies:
   flutter_test:
@@ -94,12 +106,12 @@ dev_dependencies:
   # activated in the `analysis_options.yaml` file located at the root of your
   # package. See that file for information about deactivating specific lint
   # rules and activating additional ones.
-  flutter_lints: ^5.0.0
+  flutter_lints: ^6.0.0
 
   # Testing
-  bloc_test: ^9.1.7
+  bloc_test: ^10.0.0
   mockito: ^5.4.4
-  build_runner: ^2.4.13
+  build_runner: 2.4.13
   json_serializable: ^6.8.0
   freezed: ^2.5.2
   injectable_generator: ^2.6.2

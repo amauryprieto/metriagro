@@ -1,9 +1,18 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:metriagro/core/theme/app_theme.dart';
+import 'package:metriagro/core/di/injection_container.dart';
+import '../../../conversation/presentation/bloc/conversation_bloc.dart';
+import '../../../conversation/domain/conversation_engine.dart';
+import '../../../../shared/models/conversation_models.dart';
+import '../../../../shared/services/tts_speaker.dart';
+import 'package:image_picker/image_picker.dart';
+import 'dart:typed_data';
+import '../../../../shared/services/history_storage.dart';
 
 /// PROPUESTA 3: INTERFAZ CONVERSACIONAL
 /// Enfoque: Chat/asistente, interacción natural, flujo conversacional
-/// 
+///
 /// Características:
 /// - Interfaz tipo chat/mensaje
 /// - Asistente que guía la conversación
@@ -40,29 +49,32 @@ class _ConversationalConsultationPageState extends State<ConversationalConsultat
         messageType: ChatMessageType.welcome,
       ),
       ChatMessage(
-        text: '¿En qué puedo ayudarte hoy? Puedes preguntarme sobre enfermedades, plagas, manejo de cultivos o cualquier consulta agrícola.',
+        text:
+            '¿En qué puedo ayudarte hoy? Puedes preguntarme sobre enfermedades, plagas, manejo de cultivos o cualquier consulta agrícola.',
         isUser: false,
         timestamp: DateTime.now(),
         messageType: ChatMessageType.text,
       ),
     ]);
-    
+
     // Agregar opciones rápidas
     Future.delayed(const Duration(milliseconds: 500), () {
       if (mounted) {
         setState(() {
-          _messages.add(ChatMessage(
-            text: '',
-            isUser: false,
-            timestamp: DateTime.now(),
-            messageType: ChatMessageType.quickOptions,
-            quickOptions: [
-              'Diagnosticar enfermedad 🔍',
-              'Identificar plaga 🐛',
-              'Consulta de manejo 🌿',
-              'Ver historial 📋',
-            ],
-          ));
+          _messages.add(
+            ChatMessage(
+              text: '',
+              isUser: false,
+              timestamp: DateTime.now(),
+              messageType: ChatMessageType.quickOptions,
+              quickOptions: [
+                'Diagnosticar enfermedad 🔍',
+                'Identificar plaga 🐛',
+                'Consulta de manejo 🌿',
+                'Ver historial 📋',
+              ],
+            ),
+          );
         });
         _scrollToBottom();
       }
@@ -71,16 +83,35 @@ class _ConversationalConsultationPageState extends State<ConversationalConsultat
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppTheme.backgroundPrimary,
-      appBar: _buildAppBar(),
-      body: Column(
-        children: [
-          Expanded(
-            child: _buildChatArea(),
+    return BlocProvider(
+      create: (_) =>
+          ConversationBloc(engine: sl<ConversationEngine>(), tts: sl<TtsSpeaker>())..add(const ConversationStarted()),
+      child: Scaffold(
+        backgroundColor: AppTheme.backgroundPrimary,
+        appBar: _buildAppBar(),
+        body: BlocListener<ConversationBloc, ConversationState>(
+          listener: (context, state) {
+            if (state.status == ConversationStatus.success && state.lastResponse != null) {
+              setState(() {
+                _messages.add(
+                  ChatMessage(
+                    text: state.lastResponse!.responseText,
+                    isUser: false,
+                    timestamp: DateTime.now(),
+                    messageType: ChatMessageType.text,
+                  ),
+                );
+              });
+              _scrollToBottom();
+            }
+          },
+          child: Column(
+            children: [
+              Expanded(child: _buildChatArea()),
+              _buildInputArea(),
+            ],
           ),
-          _buildInputArea(),
-        ],
+        ),
       ),
     );
   }
@@ -101,24 +132,13 @@ class _ConversationalConsultationPageState extends State<ConversationalConsultat
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                'Asistente Metriagro',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-              ),
-              Text(
-                'En línea',
-                style: TextStyle(fontSize: 12, color: Colors.white70),
-              ),
+              Text('Asistente Metriagro', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+              Text('En línea', style: TextStyle(fontSize: 12, color: Colors.white70)),
             ],
           ),
         ],
       ),
-      actions: [
-        IconButton(
-          icon: const Icon(Icons.more_vert),
-          onPressed: _showMenuOptions,
-        ),
-      ],
+      actions: [IconButton(icon: const Icon(Icons.more_vert), onPressed: _showMenuOptions)],
     );
   }
 
@@ -154,7 +174,7 @@ class _ConversationalConsultationPageState extends State<ConversationalConsultat
       child: Row(
         mainAxisAlignment: message.isUser ? MainAxisAlignment.end : MainAxisAlignment.start,
         children: [
-        if (!message.isUser) ...[
+          if (!message.isUser) ...[
             const CircleAvatar(
               backgroundColor: AppTheme.primaryColor,
               radius: 16,
@@ -169,11 +189,7 @@ class _ConversationalConsultationPageState extends State<ConversationalConsultat
                 color: message.isUser ? AppTheme.primaryColor : Colors.white,
                 borderRadius: BorderRadius.circular(20),
                 boxShadow: [
-                  BoxShadow(
-                    color: Colors.grey.withValues(alpha: 0.1),
-                    blurRadius: 5,
-                    offset: const Offset(0, 2),
-                  ),
+                  BoxShadow(color: Colors.grey.withValues(alpha: 0.1), blurRadius: 5, offset: const Offset(0, 2)),
                 ],
               ),
               child: Column(
@@ -190,10 +206,7 @@ class _ConversationalConsultationPageState extends State<ConversationalConsultat
                   const SizedBox(height: 4),
                   Text(
                     _formatTime(message.timestamp),
-                    style: TextStyle(
-                      color: message.isUser ? Colors.white70 : Colors.grey[500],
-                      fontSize: 11,
-                    ),
+                    style: TextStyle(color: message.isUser ? Colors.white70 : Colors.grey[500], fontSize: 11),
                   ),
                 ],
               ),
@@ -231,18 +244,11 @@ class _ConversationalConsultationPageState extends State<ConversationalConsultat
           const SizedBox(height: 12),
           Text(
             message.text,
-            style: const TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-              color: AppTheme.textPrimary,
-            ),
+            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppTheme.textPrimary),
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 8),
-          Text(
-            _formatTime(message.timestamp),
-            style: TextStyle(fontSize: 12, color: Colors.grey[500]),
-          ),
+          Text(_formatTime(message.timestamp), style: TextStyle(fontSize: 12, color: Colors.grey[500])),
         ],
       ),
     );
@@ -264,11 +270,7 @@ class _ConversationalConsultationPageState extends State<ConversationalConsultat
               SizedBox(width: 8),
               Text(
                 'Opciones rápidas:',
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w500,
-                  color: AppTheme.textSecondary,
-                ),
+                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: AppTheme.textSecondary),
               ),
             ],
           ),
@@ -276,9 +278,7 @@ class _ConversationalConsultationPageState extends State<ConversationalConsultat
           Wrap(
             spacing: 8,
             runSpacing: 8,
-            children: message.quickOptions!
-                .map((option) => _buildQuickOptionChip(option))
-                .toList(),
+            children: message.quickOptions!.map((option) => _buildQuickOptionChip(option)).toList(),
           ),
         ],
       ),
@@ -294,21 +294,11 @@ class _ConversationalConsultationPageState extends State<ConversationalConsultat
           color: Colors.white,
           borderRadius: BorderRadius.circular(25),
           border: Border.all(color: AppTheme.primaryColor.withValues(alpha: 0.3)),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.grey.withValues(alpha: 0.1),
-              blurRadius: 5,
-              offset: const Offset(0, 2),
-            ),
-          ],
+          boxShadow: [BoxShadow(color: Colors.grey.withValues(alpha: 0.1), blurRadius: 5, offset: const Offset(0, 2))],
         ),
         child: Text(
           option,
-          style: const TextStyle(
-            color: AppTheme.primaryColor,
-            fontSize: 14,
-            fontWeight: FontWeight.w500,
-          ),
+          style: const TextStyle(color: AppTheme.primaryColor, fontSize: 14, fontWeight: FontWeight.w500),
         ),
       ),
     );
@@ -320,7 +310,7 @@ class _ConversationalConsultationPageState extends State<ConversationalConsultat
       child: Row(
         mainAxisAlignment: message.isUser ? MainAxisAlignment.end : MainAxisAlignment.start,
         children: [
-        if (!message.isUser) ...[
+          if (!message.isUser) ...[
             const CircleAvatar(
               backgroundColor: AppTheme.primaryColor,
               radius: 16,
@@ -335,21 +325,14 @@ class _ConversationalConsultationPageState extends State<ConversationalConsultat
               color: message.isUser ? AppTheme.primaryColor : Colors.white,
               borderRadius: BorderRadius.circular(16),
               boxShadow: [
-                BoxShadow(
-                  color: Colors.grey.withValues(alpha: 0.1),
-                  blurRadius: 5,
-                  offset: const Offset(0, 2),
-                ),
+                BoxShadow(color: Colors.grey.withValues(alpha: 0.1), blurRadius: 5, offset: const Offset(0, 2)),
               ],
             ),
             child: Column(
               children: [
                 Container(
                   height: 120,
-                  decoration: BoxDecoration(
-                    color: Colors.grey[200],
-                    borderRadius: BorderRadius.circular(12),
-                  ),
+                  decoration: BoxDecoration(color: Colors.grey[200], borderRadius: BorderRadius.circular(12)),
                   child: Center(
                     child: Icon(
                       message.mediaType == 'image' ? Icons.image : Icons.videocam,
@@ -361,10 +344,7 @@ class _ConversationalConsultationPageState extends State<ConversationalConsultat
                 const SizedBox(height: 8),
                 Text(
                   message.text.isNotEmpty ? message.text : 'Archivo multimedia',
-                  style: TextStyle(
-                    color: message.isUser ? Colors.white : AppTheme.textPrimary,
-                    fontSize: 12,
-                  ),
+                  style: TextStyle(color: message.isUser ? Colors.white : AppTheme.textPrimary, fontSize: 12),
                 ),
               ],
             ),
@@ -381,13 +361,7 @@ class _ConversationalConsultationPageState extends State<ConversationalConsultat
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.grey.withValues(alpha: 0.1),
-            blurRadius: 10,
-            offset: const Offset(0, 3),
-          ),
-        ],
+        boxShadow: [BoxShadow(color: Colors.grey.withValues(alpha: 0.1), blurRadius: 10, offset: const Offset(0, 3))],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -402,11 +376,7 @@ class _ConversationalConsultationPageState extends State<ConversationalConsultat
               SizedBox(width: 8),
               Text(
                 'Análisis completado',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: AppTheme.textPrimary,
-                ),
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppTheme.textPrimary),
               ),
             ],
           ),
@@ -428,22 +398,14 @@ class _ConversationalConsultationPageState extends State<ConversationalConsultat
       leading: Icon(icon, color: AppTheme.primaryColor, size: 20),
       title: Text(
         title,
-        style: const TextStyle(
-          fontSize: 14,
-          fontWeight: FontWeight.w600,
-          color: AppTheme.textPrimary,
-        ),
+        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppTheme.textPrimary),
       ),
       children: [
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
           child: Text(
             content.isNotEmpty ? content : 'Información no disponible',
-            style: const TextStyle(
-              fontSize: 13,
-              color: AppTheme.textSecondary,
-              height: 1.4,
-            ),
+            style: const TextStyle(fontSize: 13, color: AppTheme.textSecondary, height: 1.4),
           ),
         ),
       ],
@@ -453,10 +415,7 @@ class _ConversationalConsultationPageState extends State<ConversationalConsultat
   Widget _buildFeedbackButtons(ChatMessage message) {
     return Row(
       children: [
-        const Text(
-          '¿Te fue útil?',
-          style: TextStyle(fontSize: 12, color: AppTheme.textSecondary),
-        ),
+        const Text('¿Te fue útil?', style: TextStyle(fontSize: 12, color: AppTheme.textSecondary)),
         const SizedBox(width: 12),
         GestureDetector(
           onTap: () => _provideFeedback(message, true),
@@ -469,11 +428,7 @@ class _ConversationalConsultationPageState extends State<ConversationalConsultat
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Icon(
-                  Icons.thumb_up,
-                  size: 12,
-                  color: Colors.green,
-                ),
+                const Icon(Icons.thumb_up, size: 12, color: Colors.green),
                 const SizedBox(width: 4),
                 Text(
                   'Sí',
@@ -498,11 +453,7 @@ class _ConversationalConsultationPageState extends State<ConversationalConsultat
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Icon(
-                  Icons.thumb_down,
-                  size: 12,
-                  color: Colors.red,
-                ),
+                const Icon(Icons.thumb_down, size: 12, color: Colors.red),
                 const SizedBox(width: 4),
                 Text(
                   'No',
@@ -524,13 +475,7 @@ class _ConversationalConsultationPageState extends State<ConversationalConsultat
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
-        boxShadow: [
-          BoxShadow(
-            color: Colors.grey.withValues(alpha: 0.1),
-            blurRadius: 10,
-            offset: const Offset(0, -2),
-          ),
-        ],
+        boxShadow: [BoxShadow(color: Colors.grey.withValues(alpha: 0.1), blurRadius: 10, offset: const Offset(0, -2))],
       ),
       child: SafeArea(
         child: Row(
@@ -539,9 +484,29 @@ class _ConversationalConsultationPageState extends State<ConversationalConsultat
               icon: const Icon(Icons.camera_alt, color: AppTheme.primaryColor),
               onPressed: () => _showMediaOptions(),
             ),
-            IconButton(
-              icon: const Icon(Icons.mic, color: AppTheme.primaryColor),
-              onPressed: () => _startVoiceRecording(),
+            Builder(
+              builder: (context) {
+                return BlocBuilder<ConversationBloc, ConversationState>(
+                  buildWhen: (prev, curr) => prev.isListening != curr.isListening,
+                  builder: (context, state) {
+                    final isListening = state.isListening;
+                    return Container(
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        boxShadow: isListening
+                            ? [BoxShadow(color: AppTheme.primaryColor.withValues(alpha: 0.4), blurRadius: 16)]
+                            : null,
+                      ),
+                      child: IconButton(
+                        icon: Icon(Icons.mic, color: isListening ? Colors.red : AppTheme.primaryColor),
+                        onPressed: () => context.read<ConversationBloc>().add(
+                          const ConversationListenToggled(expectedCropType: CropType.cacao),
+                        ),
+                      ),
+                    );
+                  },
+                );
+              },
             ),
             Expanded(
               child: TextField(
@@ -567,17 +532,50 @@ class _ConversationalConsultationPageState extends State<ConversationalConsultat
               ),
             ),
             const SizedBox(width: 8),
-            GestureDetector(
-              onTap: () => _sendTextMessage(_textController.text),
-              child: Container(
-                width: 40,
-                height: 40,
-                decoration: const BoxDecoration(
-                  color: AppTheme.primaryColor,
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(Icons.send, color: Colors.white, size: 20),
-              ),
+            BlocBuilder<ConversationBloc, ConversationState>(
+              builder: (context, state) {
+                final isProcessing = state.status == ConversationStatus.processing;
+                return GestureDetector(
+                  onTap: isProcessing
+                      ? null
+                      : () {
+                          final text = _textController.text;
+                          if (text.trim().isEmpty) return;
+                          setState(() {
+                            _messages.add(
+                              ChatMessage(
+                                text: text,
+                                isUser: true,
+                                timestamp: DateTime.now(),
+                                messageType: ChatMessageType.text,
+                              ),
+                            );
+                          });
+                          _textController.clear();
+                          _scrollToBottom();
+                          context.read<ConversationBloc>().add(
+                            ConversationSubmitted(
+                              ConversationRequest(
+                                textInput: text,
+                                inputType: InputType.text,
+                                expectedCropType: CropType.cacao,
+                              ),
+                            ),
+                          );
+                        },
+                  child: Container(
+                    width: 40,
+                    height: 40,
+                    decoration: const BoxDecoration(color: AppTheme.primaryColor, shape: BoxShape.circle),
+                    child: isProcessing
+                        ? const Padding(
+                            padding: EdgeInsets.all(10),
+                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                          )
+                        : const Icon(Icons.send, color: Colors.white, size: 20),
+                  ),
+                );
+              },
             ),
           ],
         ),
@@ -591,12 +589,9 @@ class _ConversationalConsultationPageState extends State<ConversationalConsultat
 
   void _handleQuickOption(String option) {
     setState(() {
-      _messages.add(ChatMessage(
-        text: option,
-        isUser: true,
-        timestamp: DateTime.now(),
-        messageType: ChatMessageType.text,
-      ));
+      _messages.add(
+        ChatMessage(text: option, isUser: true, timestamp: DateTime.now(), messageType: ChatMessageType.text),
+      );
     });
 
     _scrollToBottom();
@@ -605,21 +600,26 @@ class _ConversationalConsultationPageState extends State<ConversationalConsultat
     Future.delayed(const Duration(milliseconds: 1000), () {
       setState(() {
         if (option.contains('Diagnosticar') || option.contains('Identificar')) {
-          _messages.add(ChatMessage(
-            text: 'Para ayudarte mejor, ¿puedes compartir una foto o video de tu cultivo?',
-            isUser: false,
-            timestamp: DateTime.now(),
-            messageType: ChatMessageType.text,
-          ));
+          _messages.add(
+            ChatMessage(
+              text: 'Para ayudarte mejor, ¿puedes compartir una foto o video de tu cultivo?',
+              isUser: false,
+              timestamp: DateTime.now(),
+              messageType: ChatMessageType.text,
+            ),
+          );
         } else if (option.contains('historial')) {
           _showConversationHistory();
         } else {
-          _messages.add(ChatMessage(
-            text: 'Perfecto, estoy aquí para ayudarte con el manejo de tu cultivo. ¿Qué específicamente necesitas saber?',
-            isUser: false,
-            timestamp: DateTime.now(),
-            messageType: ChatMessageType.text,
-          ));
+          _messages.add(
+            ChatMessage(
+              text:
+                  'Perfecto, estoy aquí para ayudarte con el manejo de tu cultivo. ¿Qué específicamente necesitas saber?',
+              isUser: false,
+              timestamp: DateTime.now(),
+              messageType: ChatMessageType.text,
+            ),
+          );
         }
       });
       _scrollToBottom();
@@ -630,12 +630,9 @@ class _ConversationalConsultationPageState extends State<ConversationalConsultat
     if (text.trim().isEmpty) return;
 
     setState(() {
-      _messages.add(ChatMessage(
-        text: text,
-        isUser: true,
-        timestamp: DateTime.now(),
-        messageType: ChatMessageType.text,
-      ));
+      _messages.add(
+        ChatMessage(text: text, isUser: true, timestamp: DateTime.now(), messageType: ChatMessageType.text),
+      );
     });
 
     _textController.clear();
@@ -648,27 +645,35 @@ class _ConversationalConsultationPageState extends State<ConversationalConsultat
   void _simulateAssistantResponse(String userMessage) {
     Future.delayed(const Duration(milliseconds: 1500), () {
       setState(() {
-        if (userMessage.toLowerCase().contains('enfermedad') || 
+        if (userMessage.toLowerCase().contains('enfermedad') ||
             userMessage.toLowerCase().contains('plaga') ||
             userMessage.toLowerCase().contains('problema')) {
           // Respuesta completa con análisis
-          _messages.add(ChatMessage(
-            text: '',
-            isUser: false,
-            timestamp: DateTime.now(),
-            messageType: ChatMessageType.response,
-            naturalResponse: 'Basándome en tu descripción, parece que tu cultivo podría tener síntomas de roya. Es una enfermedad fúngica común que se manifiesta con manchas anaranjadas en las hojas.',
-            technicalResponse: 'Diagnóstico: Puccinia spp. (Roya)\nTratamiento: Fungicidas sistémicos (Propiconazol 250g/L)\nDosis: 1.5-2.0 L/ha\nFrecuencia: Cada 14-21 días',
-            references: '• Manual de Enfermedades Fúngicas - INTA 2023\n• Guía de Manejo Integrado - FAO\n• Protocolo de Aplicación - SENASA',
-          ));
+          _messages.add(
+            ChatMessage(
+              text: '',
+              isUser: false,
+              timestamp: DateTime.now(),
+              messageType: ChatMessageType.response,
+              naturalResponse:
+                  'Basándome en tu descripción, parece que tu cultivo podría tener síntomas de roya. Es una enfermedad fúngica común que se manifiesta con manchas anaranjadas en las hojas.',
+              technicalResponse:
+                  'Diagnóstico: Puccinia spp. (Roya)\nTratamiento: Fungicidas sistémicos (Propiconazol 250g/L)\nDosis: 1.5-2.0 L/ha\nFrecuencia: Cada 14-21 días',
+              references:
+                  '• Manual de Enfermedades Fúngicas - INTA 2023\n• Guía de Manejo Integrado - FAO\n• Protocolo de Aplicación - SENASA',
+            ),
+          );
         } else {
           // Respuesta simple
-          _messages.add(ChatMessage(
-            text: 'Entiendo tu consulta. Para darte una respuesta más precisa, ¿podrías compartir más detalles o una imagen de tu cultivo?',
-            isUser: false,
-            timestamp: DateTime.now(),
-            messageType: ChatMessageType.text,
-          ));
+          _messages.add(
+            ChatMessage(
+              text:
+                  'Entiendo tu consulta. Para darte una respuesta más precisa, ¿podrías compartir más detalles o una imagen de tu cultivo?',
+              isUser: false,
+              timestamp: DateTime.now(),
+              messageType: ChatMessageType.text,
+            ),
+          );
         }
       });
       _scrollToBottom();
@@ -679,18 +684,13 @@ class _ConversationalConsultationPageState extends State<ConversationalConsultat
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
       builder: (context) => Container(
         padding: const EdgeInsets.all(24),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Text(
-              'Compartir multimedia',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-            ),
+            const Text('Compartir multimedia', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
             const SizedBox(height: 20),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
@@ -728,77 +728,74 @@ class _ConversationalConsultationPageState extends State<ConversationalConsultat
     );
   }
 
-  void _captureMedia(String type) {
+  Future<void> _captureMedia(String type) async {
     Navigator.pop(context);
+    if (type == 'video') {
+      // No soportado en MVP
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Video no soportado en este MVP')));
+      return;
+    }
+    final picker = ImagePicker();
+    final XFile? picked = await picker.pickImage(source: type == 'camera' ? ImageSource.camera : ImageSource.gallery);
+    if (picked == null) return;
+    final Uint8List bytes = await picked.readAsBytes();
+
     setState(() {
-      _messages.add(ChatMessage(
-        text: 'Imagen compartida',
-        isUser: true,
-        timestamp: DateTime.now(),
-        messageType: ChatMessageType.media,
-        mediaType: type == 'video' ? 'video' : 'image',
-      ));
+      _messages.add(
+        ChatMessage(
+          text: 'Imagen compartida',
+          isUser: true,
+          timestamp: DateTime.now(),
+          messageType: ChatMessageType.media,
+          mediaType: 'image',
+        ),
+      );
     });
     _scrollToBottom();
-    
-    // Simular análisis de imagen
-    _simulateImageAnalysis();
+
+    // Enviar imagen al motor conversacional (offline/online)
+    if (mounted) {
+      context.read<ConversationBloc>().add(
+        ConversationSubmitted(
+          ConversationRequest(imageData: bytes, inputType: InputType.image, expectedCropType: CropType.cacao),
+        ),
+      );
+    }
   }
 
-  void _simulateImageAnalysis() {
-    Future.delayed(const Duration(milliseconds: 2000), () {
-      setState(() {
-        _messages.add(ChatMessage(
-          text: '',
-          isUser: false,
-          timestamp: DateTime.now(),
-          messageType: ChatMessageType.response,
-          naturalResponse: 'He analizado tu imagen y detecté síntomas de roya en las hojas. Es una enfermedad fúngica que requiere tratamiento inmediato para evitar que se propague.',
-          technicalResponse: 'Diagnóstico: Puccinia spp. (Roya)\nConfianza: 92.3%\nTratamiento recomendado: Fungicidas sistémicos\nDosis: 1.5-2.0 L/ha cada 14-21 días',
-          references: '• Manual técnico INTA 2023\n• Protocolo de tratamiento FAO\n• Guía de aplicación SENASA',
-        ));
-      });
-      _scrollToBottom();
-    });
-  }
+  // image analysis now dispatched to ConversationBloc
 
-  void _startVoiceRecording() {
-    // TODO: Implementar grabación de voz
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Función de voz próximamente...')),
-    );
-  }
+  // mic handled by ConversationBloc (tap-to-talk)
 
   void _provideFeedback(ChatMessage message, bool helpful) {
     setState(() {
       message.wasHelpful = helpful;
     });
-    
+
     setState(() {
-      _messages.add(ChatMessage(
-        text: helpful ? 'Gracias por tu feedback positivo! ¿Hay algo más en lo que pueda ayudarte?' : 'Lamento que no haya sido útil. ¿Puedes decirme qué información te faltó?',
-        isUser: false,
-        timestamp: DateTime.now(),
-        messageType: ChatMessageType.text,
-      ));
+      _messages.add(
+        ChatMessage(
+          text: helpful
+              ? 'Gracias por tu feedback positivo! ¿Hay algo más en lo que pueda ayudarte?'
+              : 'Lamento que no haya sido útil. ¿Puedes decirme qué información te faltó?',
+          isUser: false,
+          timestamp: DateTime.now(),
+          messageType: ChatMessageType.text,
+        ),
+      );
     });
     _scrollToBottom();
   }
 
   void _showConversationHistory() {
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (context) => const ConversationHistoryPage()),
-    );
+    Navigator.push(context, MaterialPageRoute(builder: (context) => const ConversationHistoryPage()));
   }
 
   void _showMenuOptions() {
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
       builder: (context) => Container(
         padding: const EdgeInsets.all(24),
         child: Column(
@@ -873,13 +870,7 @@ class _ConversationalConsultationPageState extends State<ConversationalConsultat
 }
 
 // Modelos de datos
-enum ChatMessageType {
-  text,
-  welcome,
-  quickOptions,
-  media,
-  response,
-}
+enum ChatMessageType { text, welcome, quickOptions, media, response }
 
 class ChatMessage {
   final String text;
@@ -926,22 +917,11 @@ class ConversationHistoryPage extends StatelessWidget {
           ),
         ],
       ),
-      body: ListView.builder(
-        padding: const EdgeInsets.all(16),
-        itemCount: 5,
-        itemBuilder: (context, index) {
-          return _buildConversationCard(
-            title: 'Consulta sobre roya en tomates',
-            preview: 'Hola! Necesito ayuda con unas manchas en las hojas...',
-            date: '${index + 1} días atrás',
-            messageCount: 8 + index,
-          );
-        },
-      ),
+      body: _HistoryList(),
     );
   }
 
-  Widget _buildConversationCard({
+  static Widget _buildConversationCardStatic({
     required String title,
     required String preview,
     required String date,
@@ -953,13 +933,7 @@ class ConversationHistoryPage extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.grey.withValues(alpha: 0.1),
-            blurRadius: 5,
-            offset: const Offset(0, 2),
-          ),
-        ],
+        boxShadow: [BoxShadow(color: Colors.grey.withValues(alpha: 0.1), blurRadius: 5, offset: const Offset(0, 2))],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -967,37 +941,24 @@ class ConversationHistoryPage extends StatelessWidget {
           Row(
             children: [
               CircleAvatar(
-              backgroundColor: AppTheme.primaryColor.withValues(alpha: 0.1),
-              radius: 16,
-              child: const Icon(Icons.chat, color: AppTheme.primaryColor, size: 16),
+                backgroundColor: AppTheme.primaryColor.withValues(alpha: 0.1),
+                radius: 16,
+                child: const Icon(Icons.chat, color: AppTheme.primaryColor, size: 16),
               ),
               const SizedBox(width: 12),
               Expanded(
                 child: Text(
                   title,
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                    color: AppTheme.textPrimary,
-                  ),
+                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: AppTheme.textPrimary),
                 ),
               ),
-              Text(
-                date,
-                style: TextStyle(
-                  fontSize: 12,
-                  color: Colors.grey[500],
-                ),
-              ),
+              Text(date, style: TextStyle(fontSize: 12, color: Colors.grey[500])),
             ],
           ),
           const SizedBox(height: 8),
           Text(
             preview,
-            style: TextStyle(
-              fontSize: 14,
-              color: Colors.grey[600],
-            ),
+            style: TextStyle(fontSize: 14, color: Colors.grey[600]),
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
           ),
@@ -1013,11 +974,7 @@ class ConversationHistoryPage extends StatelessWidget {
                 ),
                 child: Text(
                   '$messageCount mensajes',
-                  style: const TextStyle(
-                    fontSize: 11,
-                    color: AppTheme.primaryColor,
-                    fontWeight: FontWeight.w500,
-                  ),
+                  style: const TextStyle(fontSize: 11, color: AppTheme.primaryColor, fontWeight: FontWeight.w500),
                 ),
               ),
               Icon(Icons.arrow_forward_ios, size: 14, color: Colors.grey[400]),
@@ -1025,6 +982,57 @@ class ConversationHistoryPage extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _HistoryList extends StatefulWidget {
+  @override
+  State<_HistoryList> createState() => _HistoryListState();
+}
+
+class _HistoryListState extends State<_HistoryList> {
+  late final HistoryStorage _history;
+  List<ConversationSummary> _items = [];
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _history = sl<HistoryStorage>();
+    _load();
+  }
+
+  Future<void> _load() async {
+    final list = await _history.listConversations();
+    if (mounted) {
+      setState(() {
+        _items = list;
+        _loading = false;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_loading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    if (_items.isEmpty) {
+      return const Center(child: Text('Aún no hay conversaciones'));
+    }
+    return ListView.builder(
+      padding: const EdgeInsets.all(16),
+      itemCount: _items.length,
+      itemBuilder: (context, index) {
+        final item = _items[index];
+        return ConversationHistoryPage._buildConversationCardStatic(
+          title: item.title,
+          preview: 'Actualizada: ${item.updatedAt}',
+          date: '${item.updatedAt.hour.toString().padLeft(2, '0')}:${item.updatedAt.minute.toString().padLeft(2, '0')}',
+          messageCount: item.messageCount,
+        );
+      },
     );
   }
 }

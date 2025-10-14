@@ -16,6 +16,14 @@ import 'package:hive_flutter/hive_flutter.dart';
 import '../network/network_info.dart';
 import '../services/ml_inference_service.dart';
 import '../services/gcp_disease_api_service.dart';
+import '../../features/conversation/domain/conversation_engine.dart';
+import '../../shared/services/vision_router.dart' as shared_vision;
+import '../../shared/models/conversation_models.dart' show CropType;
+import '../../shared/services/vision_classifiers.dart';
+import '../../shared/services/local_knowledge_base.dart';
+import '../../shared/services/audio_transcriber.dart';
+import '../../shared/services/tts_speaker.dart';
+import '../../shared/services/history_storage.dart';
 
 final sl = GetIt.instance;
 
@@ -31,6 +39,42 @@ Future<void> configureDependencies() async {
   sl.registerLazySingleton<NetworkInfo>(() => NetworkInfoImpl());
   sl.registerLazySingleton<MlInferenceService>(() => LocalTfliteInferenceService());
   sl.registerLazySingleton<GcpDiseaseApiService>(() => GcpDiseaseApiServiceImpl(sl()));
+  sl.registerLazySingleton<ConnectivityService>(() => ConnectivityServiceImpl());
+
+  // Vision Router with a basic classifier (choose one crop as default, can be extended)
+  sl.registerLazySingleton<shared_vision.VisionRouter>(() {
+    final router = shared_vision.VisionRouter(
+      classifiers: [
+        // MVP: solo cacao
+        TfliteDiseaseClassifier(mlService: sl<MlInferenceService>(), supportedCropType: CropType.cacao),
+      ],
+    );
+    return router;
+  });
+
+  // Local Knowledge Base
+  sl.registerLazySingleton<LocalKnowledgeBase>(() => SqliteKnowledgeBase());
+
+  // History storage
+  sl.registerLazySingleton<HistoryStorage>(() => SqliteHistoryStorage());
+
+  // Audio Transcriber
+  sl.registerLazySingleton<AudioTranscriber>(() => SpeechToTextTranscriber());
+  // TTS
+  sl.registerLazySingleton<TtsSpeaker>(() => FlutterTtsSpeaker());
+
+  // Conversation Engines
+  sl.registerLazySingleton<ConversationEngine>(
+    () => ConversationRouter(
+      onlineEngine: OnlineConversationService(),
+      offlineEngine: OfflineConversationService(
+        audioTranscriber: sl<AudioTranscriber>(),
+        visionRouter: sl<shared_vision.VisionRouter>(),
+        localKB: sl<LocalKnowledgeBase>(),
+      ),
+      connectivityService: sl<ConnectivityService>(),
+    ),
+  );
 
   // External
   sl.registerLazySingleton(() => SharedPreferences.getInstance());

@@ -5,6 +5,7 @@ import 'core/theme/app_theme.dart';
 import 'core/firebase/firebase_options.dart';
 import 'core/firebase/firebase_analytics_config.dart';
 import 'features/consultation/presentation/pages/conversational_consultation_page.dart';
+import 'core/di/injection_container.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -19,7 +20,7 @@ void main() async {
   // await Hive.initFlutter();
 
   // Configure dependencies
-  // await configureDependencies();
+  await configureDependencies();
 
   runApp(const MetriagroApp());
 }
