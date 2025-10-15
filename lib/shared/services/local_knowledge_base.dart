@@ -1,8 +1,8 @@
 import 'dart:convert';
-import 'package:path/path.dart' as p;
 import 'package:sqflite/sqflite.dart';
 
 import '../models/conversation_models.dart';
+import 'knowledge_base_loader.dart';
 
 abstract class LocalKnowledgeBase {
   Future<void> initialize();
@@ -18,93 +18,11 @@ class SqliteKnowledgeBase implements LocalKnowledgeBase {
 
   @override
   Future<void> initialize() async {
-    final dbPath = await getDatabasesPath();
-    final fullPath = p.join(dbPath, 'metriagro_kb.db');
-    _db = await openDatabase(
-      fullPath,
-      version: 1,
-      onCreate: (db, version) async {
-        await db.execute('''
-          CREATE TABLE diseases (
-            id TEXT PRIMARY KEY,
-            name TEXT NOT NULL,
-            crop_type TEXT NOT NULL,
-            keywords TEXT,
-            summary TEXT
-          );
-        ''');
-        await db.execute('''
-          CREATE TABLE treatments (
-            id TEXT PRIMARY KEY,
-            disease_id TEXT NOT NULL,
-            title TEXT NOT NULL,
-            description TEXT NOT NULL,
-            products_json TEXT,
-            steps_json TEXT,
-            references TEXT,
-            FOREIGN KEY(disease_id) REFERENCES diseases(id)
-          );
-        ''');
-        await _seed(db);
-      },
-    );
+    // Cargar BD de prueba desde assets (para desarrollo). En prod la BD vendrá del API.
+    _db = await KnowledgeBaseLoader.loadTestDatabase();
   }
 
-  Future<void> _seed(Database db) async {
-    // Seed mínimo; ampliar según necesidades
-    final diseases = [
-      {
-        'id': 'roya_cafe',
-        'name': 'Roya del café',
-        'crop_type': 'cafe',
-        'keywords': 'roya, hojas amarillas, hongo',
-        'summary': 'Enfermedad fúngica que causa manchas anaranjadas.',
-      },
-      {
-        'id': 'monilia_cacao',
-        'name': 'Monilia del cacao',
-        'crop_type': 'cacao',
-        'keywords': 'monilia, frutos enfermos, hongo',
-        'summary': 'Afecta frutos de cacao con lesiones blanquecinas.',
-      },
-    ];
-
-    final treatments = [
-      {
-        'id': 't_royacafe_1',
-        'disease_id': 'roya_cafe',
-        'title': 'Manejo integrado de Roya del café',
-        'description': 'Use variedades tolerantes y aplique fungicidas cuando sea necesario.',
-        'products_json': jsonEncode(['Oxicloruro de cobre', 'Triazoles']),
-        'steps_json': jsonEncode([
-          'Podar ramas afectadas',
-          'Mejorar ventilación del cultivo',
-          'Aplicar fungicida según recomendación técnica',
-        ]),
-        'references': 'Manual técnico del café',
-      },
-      {
-        'id': 't_moniliacacao_1',
-        'disease_id': 'monilia_cacao',
-        'title': 'Manejo de Monilia del cacao',
-        'description': 'Remover frutos enfermos y mejorar manejo fitosanitario.',
-        'products_json': jsonEncode(['Cobre']),
-        'steps_json': jsonEncode([
-          'Cosecha sanitaria de frutos afectados',
-          'Eliminación de residuos',
-          'Aplicación preventiva de cobre',
-        ]),
-        'references': 'Guía cacao saludable',
-      },
-    ];
-
-    for (final d in diseases) {
-      await db.insert('diseases', d);
-    }
-    for (final t in treatments) {
-      await db.insert('treatments', t);
-    }
-  }
+  // Seed eliminado: la BD ahora proviene de assets/API
 
   @override
   Future<bool> isReady() async => _db != null;
@@ -113,7 +31,13 @@ class SqliteKnowledgeBase implements LocalKnowledgeBase {
   Future<TreatmentInfo?> getTreatment(String diseaseId) async {
     final db = _db;
     if (db == null) return null;
-    final rows = await db.query('treatments', where: 'disease_id = ?', whereArgs: [diseaseId], limit: 1);
+    // Nuevo esquema: treatments.target_type/target_id
+    final rows = await db.query(
+      'treatments',
+      where: 'target_type = ? AND target_id = ?',
+      whereArgs: ['disease', diseaseId],
+      limit: 1,
+    );
     if (rows.isEmpty) return null;
     final r = rows.first;
     final products = (r['products_json'] as String?) != null
@@ -136,55 +60,19 @@ class SqliteKnowledgeBase implements LocalKnowledgeBase {
   Future<List<DiseaseInfo>> searchDiseasesByKeywords(String keywords, {String? cropType}) async {
     final db = _db;
     if (db == null) return [];
-
-    // Dividir keywords en palabras individuales para búsqueda más flexible
-    final words = keywords.toLowerCase().split(RegExp(r'\s+')).where((w) => w.isNotEmpty).toList();
-    if (words.isEmpty) return [];
-
-    // Construir query con LIKE para cada palabra
-    final conditions = <String>[];
-    final args = <dynamic>[];
-
-    for (final word in words) {
-      conditions.add('LOWER(keywords) LIKE ?');
-      args.add('%$word%');
-    }
-
-    String whereClause = conditions.join(' AND ');
-    if (cropType != null) {
-      whereClause += ' AND crop_type = ?';
-      args.add(cropType);
-    }
-
-    final rows = await db.query('diseases', where: whereClause, whereArgs: args, orderBy: 'name ASC');
-
-    return rows.map((row) {
-      final cropTypeStr = row['crop_type'] as String;
-      CropType cropTypeEnum;
-      switch (cropTypeStr) {
-        case 'cacao':
-          cropTypeEnum = CropType.cacao;
-          break;
-        case 'cafe':
-          cropTypeEnum = CropType.cafe;
-          break;
-        case 'platano':
-          cropTypeEnum = CropType.platano;
-          break;
-        case 'maiz':
-          cropTypeEnum = CropType.maiz;
-          break;
-        default:
-          cropTypeEnum = CropType.unknown;
-      }
-
-      return DiseaseInfo(
-        id: row['id'] as String,
-        name: row['name'] as String,
-        cropType: cropTypeEnum,
-        summary: row['summary'] as String?,
-      );
-    }).toList();
+    // Esquema de prueba: no hay keywords/crop_type. Buscar por nombre LIKE.
+    final q = '%${keywords.toLowerCase()}%';
+    final rows = await db.rawQuery('SELECT id, name FROM diseases WHERE LOWER(name) LIKE ? ORDER BY name ASC', [q]);
+    return rows
+        .map(
+          (r) => DiseaseInfo(
+            id: r['id'] as String,
+            name: r['name'] as String,
+            cropType: CropType.cacao, // BD de cacao
+            summary: null,
+          ),
+        )
+        .toList();
   }
 
   @override
@@ -195,8 +83,8 @@ class SqliteKnowledgeBase implements LocalKnowledgeBase {
     final placeholders = diseaseIds.map((_) => '?').join(',');
     final rows = await db.query(
       'treatments',
-      where: 'disease_id IN ($placeholders)',
-      whereArgs: diseaseIds,
+      where: 'target_type = ? AND target_id IN ($placeholders)',
+      whereArgs: ['disease', ...diseaseIds],
       orderBy: 'title ASC',
     );
 

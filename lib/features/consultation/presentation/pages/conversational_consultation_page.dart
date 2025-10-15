@@ -406,8 +406,7 @@ class _ConversationalConsultationPageState extends State<ConversationalConsultat
             const SizedBox(width: 8),
           ],
           Container(
-            width: 200,
-            padding: const EdgeInsets.all(12),
+            constraints: const BoxConstraints(maxWidth: 250),
             decoration: BoxDecoration(
               color: message.isUser ? AppTheme.primaryColor : Colors.white,
               borderRadius: BorderRadius.circular(16),
@@ -416,26 +415,73 @@ class _ConversationalConsultationPageState extends State<ConversationalConsultat
               ],
             ),
             child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Container(
-                  height: 120,
-                  decoration: BoxDecoration(color: Colors.grey[200], borderRadius: BorderRadius.circular(12)),
-                  child: Center(
-                    child: Icon(
-                      message.mediaType == 'image' ? Icons.image : Icons.videocam,
-                      color: Colors.grey[500],
-                      size: 40,
+                // Mostrar imagen si hay datos de imagen
+                if (message.imageData != null) ...[
+                  ClipRRect(
+                    borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+                    child: Image.memory(message.imageData!, width: 250, height: 200, fit: BoxFit.cover),
+                  ),
+                ] else ...[
+                  // Fallback si no hay datos de imagen
+                  Container(
+                    width: 250,
+                    height: 120,
+                    decoration: BoxDecoration(
+                      color: Colors.grey[200],
+                      borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+                    ),
+                    child: Center(
+                      child: Icon(
+                        message.mediaType == 'image' ? Icons.image : Icons.videocam,
+                        color: Colors.grey[500],
+                        size: 40,
+                      ),
                     ),
                   ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  message.text.isNotEmpty ? message.text : 'Archivo multimedia',
-                  style: TextStyle(color: message.isUser ? Colors.white : AppTheme.textPrimary, fontSize: 12),
-                ),
+                ],
+                // Texto descriptivo
+                if (message.text.isNotEmpty) ...[
+                  Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        if (message.imageData != null) ...[
+                          Text(
+                            'Descripción:',
+                            style: TextStyle(
+                              color: message.isUser ? Colors.white70 : Colors.grey[600],
+                              fontSize: 12,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                        ],
+                        Text(
+                          message.text,
+                          style: TextStyle(
+                            color: message.isUser ? Colors.white : AppTheme.textPrimary,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               ],
             ),
           ),
+          if (message.isUser) ...[
+            const SizedBox(width: 8),
+            CircleAvatar(
+              backgroundColor: Colors.grey[300],
+              radius: 16,
+              child: Icon(Icons.person, color: Colors.grey[600], size: 16),
+            ),
+          ],
         ],
       ),
     );
@@ -984,11 +1030,12 @@ class _ConversationalConsultationPageState extends State<ConversationalConsultat
     setState(() {
       _messages.add(
         ChatMessage(
-          text: text.isNotEmpty ? text : 'Imagen compartida',
+          text: text.isNotEmpty ? text : '📸 Imagen compartida',
           isUser: true,
           timestamp: DateTime.now(),
           messageType: ChatMessageType.media,
           mediaType: 'image',
+          imageData: imageBytes,
         ),
       );
     });
@@ -1124,6 +1171,7 @@ class ChatMessage {
   final ChatMessageType messageType;
   final List<String>? quickOptions;
   final String? mediaType;
+  final Uint8List? imageData;
   final String? naturalResponse;
   final String? technicalResponse;
   final String? references;
@@ -1136,6 +1184,7 @@ class ChatMessage {
     required this.messageType,
     this.quickOptions,
     this.mediaType,
+    this.imageData,
     this.naturalResponse,
     this.technicalResponse,
     this.references,
