@@ -77,6 +77,15 @@ class SqliteHistoryStorage implements HistoryStorage {
 
   @override
   Future<String> createConversation({required String title}) async {
+    // Ensure database is initialized before using it
+    if (_db == null) {
+      await initialize();
+    }
+
+    if (_db == null) {
+      throw Exception('Failed to initialize database');
+    }
+
     final db = _db!;
     final id = DateTime.now().millisecondsSinceEpoch.toString();
     final now = DateTime.now();
@@ -92,6 +101,15 @@ class SqliteHistoryStorage implements HistoryStorage {
     required DateTime timestamp,
     required String type,
   }) async {
+    // Ensure database is initialized before using it
+    if (_db == null) {
+      await initialize();
+    }
+
+    if (_db == null) {
+      throw Exception('Failed to initialize database');
+    }
+
     final db = _db!;
     final id = '${conversationId}_${timestamp.millisecondsSinceEpoch}';
     await db.insert('messages', {
@@ -115,6 +133,15 @@ class SqliteHistoryStorage implements HistoryStorage {
 
   @override
   Future<List<ConversationSummary>> listConversations() async {
+    // Ensure database is initialized before using it
+    if (_db == null) {
+      await initialize();
+    }
+
+    if (_db == null) {
+      throw Exception('Failed to initialize database');
+    }
+
     final db = _db!;
     final rows = await db.rawQuery('''
       SELECT c.id, c.title, c.updated_at, COUNT(m.id) as msg_count
@@ -137,6 +164,15 @@ class SqliteHistoryStorage implements HistoryStorage {
 
   @override
   Future<List<ConversationMessage>> listMessages(String conversationId) async {
+    // Ensure database is initialized before using it
+    if (_db == null) {
+      await initialize();
+    }
+
+    if (_db == null) {
+      throw Exception('Failed to initialize database');
+    }
+
     final db = _db!;
     final rows = await db.query(
       'messages',
@@ -157,9 +193,12 @@ class SqliteHistoryStorage implements HistoryStorage {
         )
         .toList();
   }
+
+  /// Dispose of the database connection
+  Future<void> dispose() async {
+    if (_db != null) {
+      await _db!.close();
+      _db = null;
+    }
+  }
 }
-
-
-
-
-

@@ -61,14 +61,20 @@ class ConversationRouter implements ConversationEngine {
   @override
   Future<ConversationResponse> processConversation(ConversationRequest request) async {
     try {
-      // Decidir cuál motor usar
+      // For image processing, always use offline engine to leverage local ML
+      if (request.hasImage) {
+        print('[ConversationRouter] Using offline engine for image processing');
+        return await _offlineEngine.processConversation(request);
+      }
+
+      // For text-only requests, decide based on connectivity
       final isOnline = await _connectivityService.isConnected();
 
       if (isOnline && await _onlineEngine.isAvailable()) {
-        print('[ConversationRouter] Using online engine');
+        print('[ConversationRouter] Using online engine for text request');
         return await _onlineEngine.processConversation(request);
       } else {
-        print('[ConversationRouter] Using offline engine');
+        print('[ConversationRouter] Using offline engine for text request');
         return await _offlineEngine.processConversation(request);
       }
     } catch (e) {
@@ -187,6 +193,12 @@ class OfflineConversationService implements ConversationEngine {
 
   @override
   Future<ConversationResponse> processConversation(ConversationRequest request) async {
+    print('[OfflineConversationService] Processing conversation request');
+    print(
+      '[OfflineConversationService] Request details: hasText=${request.hasText}, hasAudio=${request.hasAudio}, hasImage=${request.hasImage}',
+    );
+    print('[OfflineConversationService] Expected crop type: ${request.expectedCropType}');
+
     String? transcribedText = request.textInput;
     VisionResult? visionResult;
     TreatmentInfo? treatmentInfo;
@@ -196,20 +208,50 @@ class OfflineConversationService implements ConversationEngine {
 
     // 1. Transcribir audio si existe
     if (request.hasAudio && _audioTranscriber != null) {
-      transcribedText = await _audioTranscriber.transcribe(request.audioData!);
+      print('[OfflineConversationService] Transcribing audio...');
+      try {
+        transcribedText = await _audioTranscriber.transcribe(request.audioData!);
+        print('[OfflineConversationService] Audio transcribed: $transcribedText');
+      } catch (e) {
+        print('[OfflineConversationService] Error transcribing audio: $e');
+      }
     }
 
     // 2. Extraer hint de cultivo del texto/audio
     if (transcribedText != null && transcribedText.isNotEmpty) {
       extractedHint = _extractCropTypeHint(transcribedText);
+      print('[OfflineConversationService] Extracted crop hint: $extractedHint');
     }
 
     // 3. Combinar hint extraído con expectedCropType (priorizar selector manual)
-    CropType? finalCropType = request.expectedCropType ?? extractedHint;
+    // Default to cacao if no crop type is specified
+    CropType? finalCropType = request.expectedCropType ?? extractedHint ?? CropType.cacao;
+    print('[OfflineConversationService] Final crop type: $finalCropType');
 
     // 4. Procesar imagen si existe
     if (request.hasImage) {
-      visionResult = await _visionRouter.classify(request.imageData!, finalCropType);
+      print('[OfflineConversationService] Processing image with size: ${request.imageData?.length} bytes');
+      try {
+        visionResult = await _visionRouter.classify(request.imageData!, finalCropType);
+        print(
+          '[OfflineConversationService] Image classification successful: ${visionResult.diseaseName} (${visionResult.confidence})',
+        );
+        print('[OfflineConversationService] Vision result details: ${visionResult.metadata}');
+      } catch (e) {
+        print('[OfflineConversationService] Error classifying image: $e');
+        print('[OfflineConversationService] Stack trace: ${StackTrace.current}');
+
+        // Don't rethrow, create a fallback result instead
+        visionResult = VisionResult(
+          diseaseId: 'error_occurred',
+          diseaseName: 'Error en el análisis',
+          cropType: finalCropType,
+          confidence: 0.0,
+          confidenceLevel: ConfidenceLevel.unknown,
+          metadata: {'hasDisease': false, 'error': e.toString()},
+        );
+        print('[OfflineConversationService] Using fallback vision result');
+      }
     }
 
     // 5. Buscar tratamiento principal en BD local

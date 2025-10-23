@@ -3,13 +3,15 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:metriagro/core/theme/app_theme.dart';
 import 'package:metriagro/core/di/injection_container.dart';
 import '../../../conversation/presentation/bloc/conversation_bloc.dart';
-import '../../../conversation/domain/conversation_engine.dart';
 import '../../../../shared/models/conversation_models.dart';
-import '../../../../shared/services/tts_speaker.dart';
 import '../../../../shared/services/whisper_transcriber.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:typed_data';
 import '../../../../shared/services/history_storage.dart';
+import 'dart:io';
+import 'package:flutter/foundation.dart';
+import 'dart:async';
+import 'package:image/image.dart' as img;
 
 /// PROPUESTA 3: INTERFAZ CONVERSACIONAL
 /// Enfoque: Chat/asistente, interacción natural, flujo conversacional
@@ -33,6 +35,7 @@ class _ConversationalConsultationPageState extends State<ConversationalConsultat
   final ScrollController _scrollController = ScrollController();
   final TextEditingController _textController = TextEditingController();
   final List<ChatMessage> _messages = [];
+  Timer? _debounceTimer;
 
   @override
   void initState() {
@@ -84,41 +87,56 @@ class _ConversationalConsultationPageState extends State<ConversationalConsultat
 
   @override
   Widget build(BuildContext context) {
-    return BlocProvider(
-      create: (_) =>
-          ConversationBloc(engine: sl<ConversationEngine>(), tts: sl<TtsSpeaker>())..add(const ConversationStarted()),
-      child: Scaffold(
-        backgroundColor: AppTheme.backgroundPrimary,
-        appBar: _buildAppBar(),
-        body: BlocListener<ConversationBloc, ConversationState>(
-          listener: (context, state) {
-            // Manejar estados progresivos
-            if (state.status == ConversationStatus.analyzing ||
-                state.status == ConversationStatus.searchingTreatment ||
-                state.status == ConversationStatus.validating ||
-                state.status == ConversationStatus.processing) {
-              if (state.progressMessage != null) {
-                setState(() {
-                  // Remover mensaje de progreso anterior si existe
-                  _messages.removeWhere((msg) => msg.messageType == ChatMessageType.progress);
-                  _messages.add(
-                    ChatMessage(
-                      text: state.progressMessage!,
-                      isUser: false,
-                      timestamp: DateTime.now(),
-                      messageType: ChatMessageType.progress,
-                    ),
-                  );
-                });
-                _scrollToBottom();
-              }
-            }
-
-            // Manejar respuesta final
-            if (state.status == ConversationStatus.success && state.lastResponse != null) {
+    return Scaffold(
+      backgroundColor: AppTheme.backgroundPrimary,
+      appBar: _buildAppBar(),
+      body: BlocListener<ConversationBloc, ConversationState>(
+        listener: (context, state) {
+          // Manejar estados progresivos
+          if (state.status == ConversationStatus.analyzing ||
+              state.status == ConversationStatus.searchingTreatment ||
+              state.status == ConversationStatus.validating ||
+              state.status == ConversationStatus.processing) {
+            if (state.progressMessage != null) {
               setState(() {
-                // Remover mensaje de progreso
+                // Remover mensaje de progreso anterior si existe
                 _messages.removeWhere((msg) => msg.messageType == ChatMessageType.progress);
+                _messages.add(
+                  ChatMessage(
+                    text: state.progressMessage!,
+                    isUser: false,
+                    timestamp: DateTime.now(),
+                    messageType: ChatMessageType.progress,
+                  ),
+                );
+              });
+              _scrollToBottom();
+            }
+          }
+
+          // Manejar respuesta final
+          if (state.status == ConversationStatus.success && state.lastResponse != null) {
+            setState(() {
+              // Remover mensajes de progreso e indicador de procesamiento de imagen
+              _messages.removeWhere(
+                (msg) =>
+                    msg.messageType == ChatMessageType.progress || msg.messageType == ChatMessageType.imageProcessing,
+              );
+
+              // Check if response has vision result with multiple detections
+              if (state.lastResponse!.visionResult != null &&
+                  state.lastResponse!.visionResult!.metadata != null &&
+                  state.lastResponse!.visionResult!.metadata!['all_detections'] != null) {
+                _messages.add(
+                  ChatMessage(
+                    text: state.lastResponse!.responseText,
+                    isUser: false,
+                    timestamp: DateTime.now(),
+                    messageType: ChatMessageType.multipleDetections,
+                    visionResult: state.lastResponse!.visionResult,
+                  ),
+                );
+              } else {
                 _messages.add(
                   ChatMessage(
                     text: state.lastResponse!.responseText,
@@ -127,33 +145,36 @@ class _ConversationalConsultationPageState extends State<ConversationalConsultat
                     messageType: ChatMessageType.text,
                   ),
                 );
-              });
-              _scrollToBottom();
-            }
+              }
+            });
+            _scrollToBottom();
+          }
 
-            // Manejar errores
-            if (state.status == ConversationStatus.error) {
-              setState(() {
-                // Remover mensaje de progreso
-                _messages.removeWhere((msg) => msg.messageType == ChatMessageType.progress);
-                _messages.add(
-                  ChatMessage(
-                    text: '❌ Error: ${state.errorMessage ?? "Ocurrió un error inesperado"}',
-                    isUser: false,
-                    timestamp: DateTime.now(),
-                    messageType: ChatMessageType.text,
-                  ),
-                );
-              });
-              _scrollToBottom();
-            }
-          },
-          child: Column(
-            children: [
-              Expanded(child: _buildChatArea()),
-              _buildInputArea(),
-            ],
-          ),
+          // Manejar errores
+          if (state.status == ConversationStatus.error) {
+            setState(() {
+              // Remover mensajes de progreso e indicador de procesamiento de imagen
+              _messages.removeWhere(
+                (msg) =>
+                    msg.messageType == ChatMessageType.progress || msg.messageType == ChatMessageType.imageProcessing,
+              );
+              _messages.add(
+                ChatMessage(
+                  text: '❌ Error: ${state.errorMessage ?? "Ocurrió un error inesperado"}',
+                  isUser: false,
+                  timestamp: DateTime.now(),
+                  messageType: ChatMessageType.text,
+                ),
+              );
+            });
+            _scrollToBottom();
+          }
+        },
+        child: Column(
+          children: [
+            Expanded(child: _buildChatArea()),
+            _buildInputArea(),
+          ],
         ),
       ),
     );
@@ -190,6 +211,10 @@ class _ConversationalConsultationPageState extends State<ConversationalConsultat
       controller: _scrollController,
       padding: const EdgeInsets.all(16),
       itemCount: _messages.length,
+      // Performance optimizations
+      cacheExtent: 1000, // Pre-render items
+      addAutomaticKeepAlives: false, // Don't keep off-screen items alive
+      addRepaintBoundaries: true, // Isolate repaints
       itemBuilder: (context, index) {
         return _buildMessageBubble(_messages[index]);
       },
@@ -210,6 +235,10 @@ class _ConversationalConsultationPageState extends State<ConversationalConsultat
         return _buildProgressMessage(message);
       case ChatMessageType.text:
         return _buildTextMessage(message);
+      case ChatMessageType.imageProcessing:
+        return _buildImageProcessingMessage(message);
+      case ChatMessageType.multipleDetections:
+        return _buildMultipleDetectionsMessage(message);
     }
   }
 
@@ -305,6 +334,376 @@ class _ConversationalConsultationPageState extends State<ConversationalConsultat
                   Text(message.text, style: const TextStyle(color: AppTheme.textPrimary, fontSize: 15, height: 1.4)),
                 ],
               ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildImageProcessingMessage(ChatMessage message) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.start,
+        children: [
+          const CircleAvatar(
+            backgroundColor: AppTheme.primaryColor,
+            radius: 20,
+            child: Icon(Icons.agriculture, color: Colors.white, size: 20),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [AppTheme.primaryColor.withValues(alpha: 0.1), Colors.white],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: AppTheme.primaryColor.withValues(alpha: 0.2)),
+                boxShadow: [
+                  BoxShadow(
+                    color: AppTheme.primaryColor.withValues(alpha: 0.1),
+                    blurRadius: 10,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      SizedBox(
+                        width: 24,
+                        height: 24,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 3,
+                          valueColor: AlwaysStoppedAnimation<Color>(AppTheme.primaryColor),
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              '🔍 Analizando imagen de cacao...',
+                              style: const TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                                color: AppTheme.textPrimary,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              'Ejecutando modelo de IA para detectar enfermedades',
+                              style: TextStyle(fontSize: 14, color: AppTheme.textSecondary, height: 1.3),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  // Mostrar imagen que se está procesando
+                  if (message.imageData != null) ...[
+                    Container(
+                      height: 120,
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: AppTheme.primaryColor.withValues(alpha: 0.3)),
+                      ),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(12),
+                        child: Image.memory(
+                          message.imageData!,
+                          width: double.infinity,
+                          fit: BoxFit.cover,
+                          cacheWidth: 300,
+                          cacheHeight: 120,
+                          filterQuality: FilterQuality.low,
+                          frameBuilder: (context, child, frame, wasSynchronouslyLoaded) {
+                            if (wasSynchronouslyLoaded) return child;
+                            return AnimatedOpacity(
+                              opacity: frame == null ? 0 : 1,
+                              duration: const Duration(milliseconds: 150),
+                              child: child,
+                            );
+                          },
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                  ],
+                  // Indicador de progreso con pasos
+                  _buildProcessingSteps(),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildProcessingSteps() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Procesando...',
+          style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppTheme.textSecondary),
+        ),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          runSpacing: 4,
+          children: [
+            _buildAnimatedStepIndicator('Optimizando', true),
+            _buildAnimatedStepIndicator('Ejecutando ML', true),
+            _buildAnimatedStepIndicator('Generando', true),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildAnimatedStepIndicator(String label, bool isActive) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        AnimatedContainer(
+          duration: const Duration(milliseconds: 300),
+          width: 8,
+          height: 8,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: isActive ? AppTheme.primaryColor : Colors.grey[300],
+            boxShadow: isActive
+                ? [BoxShadow(color: AppTheme.primaryColor.withValues(alpha: 0.3), blurRadius: 4, spreadRadius: 1)]
+                : null,
+          ),
+        ),
+        const SizedBox(width: 4),
+        Flexible(
+          child: AnimatedDefaultTextStyle(
+            duration: const Duration(milliseconds: 300),
+            style: TextStyle(
+              fontSize: 10,
+              color: isActive ? AppTheme.primaryColor : Colors.grey[500],
+              fontWeight: isActive ? FontWeight.w600 : FontWeight.normal,
+            ),
+            child: Text(label, overflow: TextOverflow.ellipsis),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildMultipleDetectionsMessage(ChatMessage message) {
+    final visionResult = message.visionResult!;
+    final allDetections = visionResult.metadata?['all_detections'] as List<dynamic>? ?? [];
+    final totalDetections = allDetections.length;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.start,
+        children: [
+          const CircleAvatar(
+            backgroundColor: AppTheme.primaryColor,
+            radius: 20,
+            child: Icon(Icons.agriculture, color: Colors.white, size: 20),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [AppTheme.primaryColor.withValues(alpha: 0.1), Colors.white],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: AppTheme.primaryColor.withValues(alpha: 0.2)),
+                boxShadow: [
+                  BoxShadow(
+                    color: AppTheme.primaryColor.withValues(alpha: 0.1),
+                    blurRadius: 10,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Header with detection count
+                  Row(
+                    children: [
+                      Icon(Icons.analytics, color: AppTheme.primaryColor, size: 24),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              '🔍 Análisis completado',
+                              style: const TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                                color: AppTheme.textPrimary,
+                              ),
+                            ),
+                            Text(
+                              'Se encontraron $totalDetections detecciones',
+                              style: TextStyle(fontSize: 14, color: AppTheme.textSecondary),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Main response text
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: AppTheme.primaryColor.withValues(alpha: 0.2)),
+                    ),
+                    child: Text(
+                      message.text,
+                      style: const TextStyle(fontSize: 15, color: AppTheme.textPrimary, height: 1.4),
+                    ),
+                  ),
+
+                  const SizedBox(height: 16),
+
+                  // Detection results
+                  Text(
+                    'Resultados de detección:',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: AppTheme.textPrimary),
+                  ),
+                  const SizedBox(height: 12),
+
+                  // List of detections
+                  ...allDetections.take(5).map((detection) => _buildDetectionItem(detection)).toList(),
+
+                  if (totalDetections > 5) ...[
+                    const SizedBox(height: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: AppTheme.primaryColor.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        '+${totalDetections - 5} detecciones adicionales',
+                        style: TextStyle(fontSize: 12, color: AppTheme.primaryColor, fontWeight: FontWeight.w500),
+                      ),
+                    ),
+                  ],
+
+                  const SizedBox(height: 12),
+
+                  // Confidence summary
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.blue[50],
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.blue[200]!),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(Icons.info_outline, color: Colors.blue[600], size: 20),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'Confianza promedio: ${(visionResult.confidence * 100).toStringAsFixed(1)}%',
+                            style: TextStyle(fontSize: 13, color: Colors.blue[800], fontWeight: FontWeight.w500),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDetectionItem(dynamic detection) {
+    final diseaseName = detection['diseaseName'] as String? ?? 'Desconocido';
+    final confidence = (detection['confidence'] as num?)?.toDouble() ?? 0.0;
+    final confidencePercent = (confidence * 100).toStringAsFixed(1);
+
+    Color confidenceColor;
+    if (confidence >= 0.8) {
+      confidenceColor = Colors.green;
+    } else if (confidence >= 0.6) {
+      confidenceColor = Colors.orange;
+    } else {
+      confidenceColor = Colors.red;
+    }
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.grey[200]!),
+        boxShadow: [BoxShadow(color: Colors.grey.withValues(alpha: 0.1), blurRadius: 4, offset: const Offset(0, 2))],
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 8,
+            height: 8,
+            decoration: BoxDecoration(color: confidenceColor, shape: BoxShape.circle),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  diseaseName,
+                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppTheme.textPrimary),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  'Confianza: $confidencePercent%',
+                  style: TextStyle(fontSize: 12, color: confidenceColor, fontWeight: FontWeight.w500),
+                ),
+              ],
+            ),
+          ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            decoration: BoxDecoration(
+              color: confidenceColor.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Text(
+              confidencePercent,
+              style: TextStyle(fontSize: 11, color: confidenceColor, fontWeight: FontWeight.bold),
             ),
           ),
         ],
@@ -421,7 +820,23 @@ class _ConversationalConsultationPageState extends State<ConversationalConsultat
                 if (message.imageData != null) ...[
                   ClipRRect(
                     borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
-                    child: Image.memory(message.imageData!, width: 250, height: 200, fit: BoxFit.cover),
+                    child: Image.memory(
+                      message.imageData!,
+                      width: 250,
+                      height: 200,
+                      fit: BoxFit.cover,
+                      cacheWidth: 250,
+                      cacheHeight: 200,
+                      filterQuality: FilterQuality.low, // Faster rendering
+                      frameBuilder: (context, child, frame, wasSynchronouslyLoaded) {
+                        if (wasSynchronouslyLoaded) return child;
+                        return AnimatedOpacity(
+                          opacity: frame == null ? 0 : 1,
+                          duration: const Duration(milliseconds: 200),
+                          child: child,
+                        );
+                      },
+                    ),
                   ),
                 ] else ...[
                   // Fallback si no hay datos de imagen
@@ -861,17 +1276,84 @@ class _ConversationalConsultationPageState extends State<ConversationalConsultat
   }
 
   Future<void> _captureMedia(String type) async {
+    // Capturar el bloc antes de cerrar el modal para no perder el scope del provider
+    final conversationBloc = context.read<ConversationBloc>();
     Navigator.pop(context);
-    final picker = ImagePicker();
-    final XFile? picked = await picker.pickImage(source: type == 'camera' ? ImageSource.camera : ImageSource.gallery);
-    if (picked == null) return;
-    final Uint8List bytes = await picked.readAsBytes();
 
-    // Mostrar modal multimodal inmediatamente después de capturar
-    _showMultimodalCaptureModal(bytes);
+    try {
+      final picker = ImagePicker();
+      final XFile? picked = await picker.pickImage(
+        source: type == 'camera' ? ImageSource.camera : ImageSource.gallery,
+        maxWidth: 800, // Limit image size
+        maxHeight: 600,
+        imageQuality: 85, // Compress image
+      );
+      if (picked == null) return;
+
+      // Show loading indicator while processing
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => const Center(child: CircularProgressIndicator()),
+      );
+
+      // Process image in background to avoid blocking main thread
+      final bytes = await compute(_processImage, picked.path);
+
+      // Hide loading indicator
+      if (mounted) {
+        Navigator.of(context).pop();
+      }
+
+      // Mostrar modal multimodal inmediatamente después de capturar
+      if (mounted) {
+        _showMultimodalCaptureModal(bytes, conversationBloc);
+      }
+    } catch (e) {
+      // Hide loading indicator on error
+      if (mounted) {
+        Navigator.of(context).pop();
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error procesando imagen: $e'), backgroundColor: Colors.red));
+      }
+    }
   }
 
-  void _showMultimodalCaptureModal(Uint8List imageBytes) {
+  // Static method for background image processing
+  static Future<Uint8List> _processImage(String path) async {
+    try {
+      final file = File(path);
+      final bytes = await file.readAsBytes();
+
+      // Optimize image size if it's too large
+      if (bytes.length > 1024 * 1024) {
+        // If larger than 1MB
+        // Decode and re-encode with compression
+        final decoded = img.decodeImage(bytes);
+        if (decoded != null) {
+          // Resize if too large
+          img.Image resized = decoded;
+          if (decoded.width > 800 || decoded.height > 600) {
+            resized = img.copyResize(decoded, width: 800, height: 600, interpolation: img.Interpolation.linear);
+          }
+
+          // Re-encode with compression
+          final compressedBytes = img.encodeJpg(resized, quality: 85);
+          return Uint8List.fromList(compressedBytes);
+        }
+      }
+
+      return bytes;
+    } catch (e) {
+      print('[ConversationalConsultationPage] Error processing image: $e');
+      // Return original bytes if processing fails
+      final file = File(path);
+      return await file.readAsBytes();
+    }
+  }
+
+  void _showMultimodalCaptureModal(Uint8List imageBytes, ConversationBloc conversationBloc) {
     final TextEditingController textController = TextEditingController();
     bool isRecording = false;
     final WhisperTranscriber transcriber = SpeechToTextWhisperTranscriber();
@@ -922,7 +1404,14 @@ class _ConversationalConsultationPageState extends State<ConversationalConsultat
                 ),
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(12),
-                  child: Image.memory(imageBytes, fit: BoxFit.cover, width: double.infinity),
+                  child: Image.memory(
+                    imageBytes,
+                    fit: BoxFit.cover,
+                    width: double.infinity,
+                    cacheWidth: 400,
+                    cacheHeight: 200,
+                    filterQuality: FilterQuality.low,
+                  ),
                 ),
               ),
 
@@ -1007,7 +1496,7 @@ class _ConversationalConsultationPageState extends State<ConversationalConsultat
                   child: ElevatedButton(
                     onPressed: () {
                       Navigator.pop(context);
-                      _sendMultimodalRequest(imageBytes, textController.text.trim(), null);
+                      _sendMultimodalRequest(imageBytes, textController.text.trim(), null, conversationBloc);
                     },
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppTheme.primaryColor,
@@ -1026,7 +1515,13 @@ class _ConversationalConsultationPageState extends State<ConversationalConsultat
     );
   }
 
-  void _sendMultimodalRequest(Uint8List imageBytes, String text, CropType? cropType) {
+  void _sendMultimodalRequest(
+    Uint8List imageBytes,
+    String text,
+    CropType? cropType,
+    ConversationBloc conversationBloc,
+  ) {
+    // Mostrar mensaje del usuario inmediatamente
     setState(() {
       _messages.add(
         ChatMessage(
@@ -1041,14 +1536,33 @@ class _ConversationalConsultationPageState extends State<ConversationalConsultat
     });
     _scrollToBottom();
 
+    // Mostrar indicador de procesamiento inmediatamente
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        setState(() {
+          _messages.add(
+            ChatMessage(
+              text: 'Procesando imagen...',
+              isUser: false,
+              timestamp: DateTime.now(),
+              messageType: ChatMessageType.imageProcessing,
+              imageData: imageBytes,
+            ),
+          );
+        });
+        _scrollToBottom();
+      }
+    });
+
+    // Send request
     if (mounted) {
-      context.read<ConversationBloc>().add(
+      conversationBloc.add(
         ConversationSubmitted(
           ConversationRequest(
             imageData: imageBytes,
             textInput: text.isNotEmpty ? text : null,
             inputType: text.isNotEmpty ? InputType.multimodal : InputType.image,
-            expectedCropType: null, // El sistema detectará automáticamente el tipo de cultivo del texto
+            expectedCropType: CropType.cacao, // Default to cacao as specified
           ),
         ),
       );
@@ -1142,19 +1656,28 @@ class _ConversationalConsultationPageState extends State<ConversationalConsultat
   }
 
   void _scrollToBottom() {
-    Future.delayed(const Duration(milliseconds: 100), () {
-      if (_scrollController.hasClients) {
-        _scrollController.animateTo(
-          _scrollController.position.maxScrollExtent,
-          duration: const Duration(milliseconds: 300),
-          curve: Curves.easeOut,
-        );
+    // Debounce scroll operations to prevent excessive calls
+    _debounceTimer?.cancel();
+    _debounceTimer = Timer(const Duration(milliseconds: 50), () {
+      if (_scrollController.hasClients && mounted) {
+        // Use a more efficient scroll method
+        try {
+          _scrollController.animateTo(
+            _scrollController.position.maxScrollExtent,
+            duration: const Duration(milliseconds: 200),
+            curve: Curves.easeOut,
+          );
+        } catch (e) {
+          // Ignore scroll errors to prevent crashes
+          print('[ConversationalConsultationPage] Scroll error: $e');
+        }
       }
     });
   }
 
   @override
   void dispose() {
+    _debounceTimer?.cancel();
     _scrollController.dispose();
     _textController.dispose();
     super.dispose();
@@ -1162,7 +1685,7 @@ class _ConversationalConsultationPageState extends State<ConversationalConsultat
 }
 
 // Modelos de datos
-enum ChatMessageType { text, welcome, quickOptions, media, response, progress }
+enum ChatMessageType { text, welcome, quickOptions, media, response, progress, imageProcessing, multipleDetections }
 
 class ChatMessage {
   final String text;
@@ -1175,6 +1698,7 @@ class ChatMessage {
   final String? naturalResponse;
   final String? technicalResponse;
   final String? references;
+  final VisionResult? visionResult;
   bool? wasHelpful;
 
   ChatMessage({
@@ -1188,6 +1712,7 @@ class ChatMessage {
     this.naturalResponse,
     this.technicalResponse,
     this.references,
+    this.visionResult,
     this.wasHelpful,
   });
 }

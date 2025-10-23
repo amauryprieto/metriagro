@@ -38,6 +38,13 @@ class ConversationBloc extends Bloc<ConversationEvent, ConversationState> {
   }
 
   Future<void> _onSubmitted(ConversationSubmitted event, Emitter<ConversationState> emit) async {
+    print('[ConversationBloc] Starting conversation submission');
+    print('[ConversationBloc] Request type: ${event.request.inputType}');
+    print('[ConversationBloc] Has image: ${event.request.hasImage}');
+    print('[ConversationBloc] Has text: ${event.request.hasText}');
+    print('[ConversationBloc] Has audio: ${event.request.hasAudio}');
+    print('[ConversationBloc] Expected crop type: ${event.request.expectedCropType}');
+
     emit(state.copyWith(status: ConversationStatus.processing, progressMessage: 'Iniciando análisis...'));
     try {
       // Guardar mensaje del usuario
@@ -53,11 +60,13 @@ class ConversationBloc extends Bloc<ConversationEvent, ConversationState> {
 
       // 1. Transcribir audio si existe
       if (event.request.hasAudio) {
+        print('[ConversationBloc] Processing audio transcription');
         emit(state.copyWith(status: ConversationStatus.processing, progressMessage: '🔄 Transcribiendo audio...'));
       }
 
       // 2. Analizar imagen
       if (event.request.hasImage) {
+        print('[ConversationBloc] Processing image analysis');
         emit(state.copyWith(status: ConversationStatus.analyzing, progressMessage: '🔍 Analizando tu foto...'));
       }
 
@@ -69,7 +78,9 @@ class ConversationBloc extends Bloc<ConversationEvent, ConversationState> {
       // 4. Validar resultados
       emit(state.copyWith(status: ConversationStatus.validating, progressMessage: '✅ Validando resultados...'));
 
+      print('[ConversationBloc] Calling conversation engine...');
       final response = await _engine.processConversation(event.request);
+      print('[ConversationBloc] Conversation engine response received');
       emit(state.copyWith(status: ConversationStatus.success, lastResponse: response));
 
       // Guardar respuesta del asistente
@@ -81,7 +92,9 @@ class ConversationBloc extends Bloc<ConversationEvent, ConversationState> {
         type: 'text',
       );
       await _tts.speak(response.responseText);
-    } catch (e) {
+    } catch (e, stackTrace) {
+      print('[ConversationBloc] Error occurred: $e');
+      print('[ConversationBloc] Stack trace: $stackTrace');
       emit(state.copyWith(status: ConversationStatus.error, errorMessage: e.toString()));
     }
   }
