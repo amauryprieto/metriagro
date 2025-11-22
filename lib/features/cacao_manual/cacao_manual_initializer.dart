@@ -4,7 +4,7 @@ import '../../core/di/injection_container.dart';
 
 class CacaoManualInitializer {
   static const String _seedVersionKey = 'cacao_manual_seed_version';
-  static const int _currentSeedVersion = 1;
+  static const int _currentSeedVersion = 2;
 
   static Future<void> initialize() async {
     final prefs = await SharedPreferences.getInstance();
