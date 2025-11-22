@@ -72,6 +72,10 @@ dependencies:
   hive: ^2.2.3
   hive_flutter: ^1.1.0
 
+  # SQLite Database
+  sqflite: ^2.4.1
+  path: ^1.9.0
+
   # Utilities
   get_it: ^8.0.2
   injectable: ^2.5.0

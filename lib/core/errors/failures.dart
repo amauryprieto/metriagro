@@ -29,3 +29,11 @@ class AuthFailure extends Failure {
 class MLFailure extends Failure {
   const MLFailure({required super.message, super.code});
 }
+
+class DatabaseFailure extends Failure {
+  const DatabaseFailure({required super.message, super.code});
+}
+
+class ManualSearchFailure extends Failure {
+  const ManualSearchFailure({required super.message, super.code});
+}

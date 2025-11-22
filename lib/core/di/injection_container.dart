@@ -15,6 +15,18 @@ import 'package:hive_flutter/hive_flutter.dart';
 
 import '../network/network_info.dart';
 
+// Cacao Manual imports
+import '../../features/cacao_manual/data/datasources/cacao_manual_database.dart';
+import '../../features/cacao_manual/data/datasources/cacao_manual_local_datasource.dart';
+import '../../features/cacao_manual/data/datasources/cacao_manual_seeder.dart';
+import '../../features/cacao_manual/data/repositories/cacao_manual_repository_impl.dart';
+import '../../features/cacao_manual/domain/repositories/cacao_manual_repository.dart';
+import '../../features/cacao_manual/domain/usecases/search_manual.dart';
+import '../../features/cacao_manual/domain/usecases/get_sections_by_ml_class.dart';
+import '../../features/cacao_manual/domain/usecases/get_combined_diagnosis.dart';
+import '../../features/cacao_manual/domain/usecases/get_section_by_id.dart';
+import '../../features/cacao_manual/domain/usecases/get_all_chapters.dart';
+
 final sl = GetIt.instance;
 
 @InjectableInit()
@@ -48,4 +60,34 @@ Future<void> configureDependencies() async {
       trackAutomaticEvents: true,
     );
   });
+
+  // Cacao Manual Feature
+  await _registerCacaoManualFeature();
+}
+
+Future<void> _registerCacaoManualFeature() async {
+  // Database
+  sl.registerLazySingleton<CacaoManualDatabase>(() => CacaoManualDatabase.instance);
+
+  // Data sources
+  sl.registerLazySingleton<CacaoManualLocalDataSource>(
+    () => CacaoManualLocalDataSourceImpl(databaseHelper: sl()),
+  );
+
+  // Seeder
+  sl.registerLazySingleton<CacaoManualSeeder>(
+    () => CacaoManualSeeder(sl()),
+  );
+
+  // Repository
+  sl.registerLazySingleton<CacaoManualRepository>(
+    () => CacaoManualRepositoryImpl(localDataSource: sl()),
+  );
+
+  // Use cases
+  sl.registerLazySingleton(() => SearchManual(sl()));
+  sl.registerLazySingleton(() => GetSectionsByMlClass(sl()));
+  sl.registerLazySingleton(() => GetCombinedDiagnosis(sl()));
+  sl.registerLazySingleton(() => GetSectionById(sl()));
+  sl.registerLazySingleton(() => GetAllChapters(sl()));
 }
