@@ -5,6 +5,7 @@ class AppConstants {
 
   // API Constants
   static const String baseUrl = 'https://api.metriagro.com';
+  static const String gcpDiseaseEndpoint = '/api/v1/disease-analysis';
   static const int connectionTimeout = 30000;
   static const int receiveTimeout = 30000;
 
@@ -21,6 +22,7 @@ class AppConstants {
   // ML Model Constants
   static const String tfliteModelPath = 'assets/models/';
   static const String modelFileName = 'crop_analysis_model.tflite';
+  static const String labelsFileName = 'labels.txt';
 
   // Analytics Events
   static const String loginEvent = 'user_login';
