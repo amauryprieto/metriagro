@@ -6,6 +6,7 @@ import 'package:metriagro/core/utils/validators.dart';
 import 'package:metriagro/core/firebase/firebase_analytics_config.dart';
 import 'package:metriagro/core/firebase/auth_service.dart';
 import 'package:metriagro/shared/widgets/google_logo_widget.dart';
+import 'package:metriagro/features/home/presentation/pages/home_page.dart';
 
 class SimpleWelcomePage extends StatefulWidget {
   const SimpleWelcomePage({super.key});
@@ -340,8 +341,10 @@ class _SimpleWelcomePageState extends State<SimpleWelcomePage> {
           const SnackBar(content: Text('Inicio de sesión con Google exitoso'), backgroundColor: AppTheme.successColor),
         );
 
-        // TODO: Navigate to main app or home screen
-        // Navigator.pushReplacementNamed(context, '/home');
+        // Navigate to home screen
+        if (mounted) {
+          Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (context) => const HomePage()));
+        }
       } else {
         // User cancelled the sign-in
         ScaffoldMessenger.of(context).showSnackBar(
@@ -394,8 +397,10 @@ class _SimpleWelcomePageState extends State<SimpleWelcomePage> {
           ),
         );
 
-        // TODO: Navigate to main app or home screen
-        // Navigator.pushReplacementNamed(context, '/home');
+        // Navigate to home screen
+        if (mounted) {
+          Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (context) => const HomePage()));
+        }
       }
     } catch (error) {
       ScaffoldMessenger.of(
