@@ -39,7 +39,7 @@ class _ConversationalConsultationPageState extends State<ConversationalConsultat
   Timer? _debounceTimer;
 
   // Offline mode
-  late final OfflineModeService _offlineModeService;
+  OfflineModeService? _offlineModeService;
   bool _isOfflineMode = false;
   StreamSubscription<bool>? _offlineModeSubscription;
 
@@ -51,20 +51,32 @@ class _ConversationalConsultationPageState extends State<ConversationalConsultat
   }
 
   Future<void> _initializeOfflineMode() async {
-    _offlineModeService = sl<OfflineModeService>();
-    await _offlineModeService.initialize();
-    if (mounted) {
-      setState(() {
-        _isOfflineMode = _offlineModeService.isOfflineMode;
-      });
-    }
-    _offlineModeSubscription = _offlineModeService.offlineModeStream.listen((isOffline) {
+    try {
+      // Check if service is registered
+      if (!sl.isRegistered<OfflineModeService>()) {
+        print('[ConversationalConsultationPage] OfflineModeService not registered yet');
+        return;
+      }
+
+      _offlineModeService = sl<OfflineModeService>();
+      await _offlineModeService!.initialize();
+
       if (mounted) {
         setState(() {
-          _isOfflineMode = isOffline;
+          _isOfflineMode = _offlineModeService!.isOfflineMode;
         });
       }
-    });
+
+      _offlineModeSubscription = _offlineModeService!.offlineModeStream.listen((isOffline) {
+        if (mounted) {
+          setState(() {
+            _isOfflineMode = isOffline;
+          });
+        }
+      });
+    } catch (e) {
+      print('[ConversationalConsultationPage] Error initializing offline mode: $e');
+    }
   }
 
   void _initializeChat() {
@@ -1688,11 +1700,13 @@ class _ConversationalConsultationPageState extends State<ConversationalConsultat
                   ),
                   value: _isOfflineMode,
                   activeColor: AppTheme.primaryColor,
-                  onChanged: (value) async {
-                    await _offlineModeService.setOfflineMode(value);
-                    setModalState(() {});
-                    setState(() {});
-                  },
+                  onChanged: _offlineModeService != null
+                      ? (value) async {
+                          await _offlineModeService!.setOfflineMode(value);
+                          setModalState(() {});
+                          setState(() {});
+                        }
+                      : null,
                 ),
               ),
               const SizedBox(height: 8),
