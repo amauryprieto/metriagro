@@ -136,6 +136,7 @@ flutter:
   assets:
     - assets/models/
     - assets/db/test_cacao_kb.sql
+    - assets/database/cacao_manual.db
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images
