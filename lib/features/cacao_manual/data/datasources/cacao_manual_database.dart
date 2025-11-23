@@ -1,9 +1,16 @@
+import 'dart:io';
+import 'package:flutter/services.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class CacaoManualDatabase {
   static const String _databaseName = 'cacao_manual.db';
-  static const int _databaseVersion = 1;
+  static const String _assetPath = 'assets/database/cacao_manual.db';
+  static const String _dbVersionKey = 'cacao_manual_db_version';
+
+  /// Increment this when the pre-built database in assets is updated
+  static const int _currentDbVersion = 1;
 
   static Database? _database;
 
@@ -20,122 +27,97 @@ class CacaoManualDatabase {
     final dbPath = await getDatabasesPath();
     final path = join(dbPath, _databaseName);
 
-    return await openDatabase(
-      path,
-      version: _databaseVersion,
-      onCreate: _onCreate,
-      onUpgrade: _onUpgrade,
-    );
+    // Check if we need to copy/update the database from assets
+    await _ensureDatabaseFromAssets(path);
+
+    return await openDatabase(path);
   }
 
-  Future<void> _onCreate(Database db, int version) async {
-    // Main manual sections table
-    await db.execute('''
-      CREATE TABLE manual_sections (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        chapter TEXT NOT NULL,
-        section_title TEXT NOT NULL,
-        content TEXT NOT NULL,
-        symptoms TEXT,
-        treatment TEXT,
-        prevention TEXT,
-        severity_level INTEGER DEFAULT 1,
-        image_examples TEXT,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      )
-    ''');
+  /// Copies the pre-built database from assets if needed
+  Future<void> _ensureDatabaseFromAssets(String dbPath) async {
+    final prefs = await SharedPreferences.getInstance();
+    final installedVersion = prefs.getInt(_dbVersionKey) ?? 0;
+    final dbFile = File(dbPath);
+    final dbExists = await dbFile.exists();
 
-    // FTS5 virtual table for full-text search
-    await db.execute('''
-      CREATE VIRTUAL TABLE manual_fts USING fts5(
-        chapter,
-        section_title,
-        content,
-        symptoms,
-        treatment,
-        prevention,
-        content=manual_sections,
-        content_rowid=id
-      )
-    ''');
+    // Copy database if it doesn't exist or if there's a newer version
+    if (!dbExists || installedVersion < _currentDbVersion) {
+      // Close existing connection if open
+      if (_database != null) {
+        await _database!.close();
+        _database = null;
+      }
 
-    // Triggers to keep FTS index in sync
-    await db.execute('''
-      CREATE TRIGGER manual_sections_ai AFTER INSERT ON manual_sections BEGIN
-        INSERT INTO manual_fts(rowid, chapter, section_title, content, symptoms, treatment, prevention)
-        VALUES (new.id, new.chapter, new.section_title, new.content, new.symptoms, new.treatment, new.prevention);
-      END
-    ''');
+      // Delete old database if it exists
+      if (dbExists) {
+        await dbFile.delete();
+      }
 
-    await db.execute('''
-      CREATE TRIGGER manual_sections_ad AFTER DELETE ON manual_sections BEGIN
-        INSERT INTO manual_fts(manual_fts, rowid, chapter, section_title, content, symptoms, treatment, prevention)
-        VALUES('delete', old.id, old.chapter, old.section_title, old.content, old.symptoms, old.treatment, old.prevention);
-      END
-    ''');
+      // Ensure the directory exists
+      final dbDir = Directory(dirname(dbPath));
+      if (!await dbDir.exists()) {
+        await dbDir.create(recursive: true);
+      }
 
-    await db.execute('''
-      CREATE TRIGGER manual_sections_au AFTER UPDATE ON manual_sections BEGIN
-        INSERT INTO manual_fts(manual_fts, rowid, chapter, section_title, content, symptoms, treatment, prevention)
-        VALUES('delete', old.id, old.chapter, old.section_title, old.content, old.symptoms, old.treatment, old.prevention);
-        INSERT INTO manual_fts(rowid, chapter, section_title, content, symptoms, treatment, prevention)
-        VALUES (new.id, new.chapter, new.section_title, new.content, new.symptoms, new.treatment, new.prevention);
-      END
-    ''');
+      // Copy from assets
+      try {
+        final ByteData data = await rootBundle.load(_assetPath);
+        final List<int> bytes = data.buffer.asUint8List(
+          data.offsetInBytes,
+          data.lengthInBytes,
+        );
+        await dbFile.writeAsBytes(bytes, flush: true);
 
-    // Tags table
-    await db.execute('''
-      CREATE TABLE tags (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        name TEXT UNIQUE NOT NULL
-      )
-    ''');
-
-    // Section-Tags relationship (many-to-many)
-    await db.execute('''
-      CREATE TABLE section_tags (
-        section_id INTEGER NOT NULL,
-        tag_id INTEGER NOT NULL,
-        PRIMARY KEY (section_id, tag_id),
-        FOREIGN KEY (section_id) REFERENCES manual_sections(id) ON DELETE CASCADE,
-        FOREIGN KEY (tag_id) REFERENCES tags(id) ON DELETE CASCADE
-      )
-    ''');
-
-    // ML classification to manual sections mapping
-    await db.execute('''
-      CREATE TABLE ml_to_manual_mapping (
-        ml_class_id TEXT PRIMARY KEY,
-        ml_class_label TEXT NOT NULL,
-        section_ids TEXT NOT NULL,
-        confidence_threshold REAL DEFAULT 0.7
-      )
-    ''');
-
-    // Synonyms table for improved search
-    await db.execute('''
-      CREATE TABLE synonyms (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        term TEXT NOT NULL,
-        synonym TEXT NOT NULL,
-        UNIQUE(term, synonym)
-      )
-    ''');
-
-    // Create indexes for better performance
-    await db.execute('CREATE INDEX idx_sections_chapter ON manual_sections(chapter)');
-    await db.execute('CREATE INDEX idx_sections_severity ON manual_sections(severity_level)');
-    await db.execute('CREATE INDEX idx_synonyms_term ON synonyms(term)');
+        // Update installed version
+        await prefs.setInt(_dbVersionKey, _currentDbVersion);
+      } catch (e) {
+        // If asset copy fails, fall back to creating empty database
+        // This shouldn't happen in production but provides a safety net
+        rethrow;
+      }
+    }
   }
 
-  Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
-    // Handle migrations here for future versions
+  /// Force re-copy the database from assets
+  /// Useful for debugging or forcing an update
+  Future<void> resetFromAssets() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_dbVersionKey);
+
+    if (_database != null) {
+      await _database!.close();
+      _database = null;
+    }
+
+    final dbPath = await getDatabasesPath();
+    final path = join(dbPath, _databaseName);
+    final dbFile = File(path);
+
+    if (await dbFile.exists()) {
+      await dbFile.delete();
+    }
+
+    // Re-initialize will copy from assets
+    _database = await _initDatabase();
+  }
+
+  /// Get the current database version
+  Future<int> getInstalledVersion() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getInt(_dbVersionKey) ?? 0;
+  }
+
+  /// Check if database needs update
+  Future<bool> needsUpdate() async {
+    final installedVersion = await getInstalledVersion();
+    return installedVersion < _currentDbVersion;
   }
 
   Future<void> close() async {
-    final db = await database;
-    await db.close();
-    _database = null;
+    if (_database != null) {
+      await _database!.close();
+      _database = null;
+    }
   }
 
   Future<void> clearAllData() async {

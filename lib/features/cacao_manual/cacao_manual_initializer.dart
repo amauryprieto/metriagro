@@ -1,29 +1,39 @@
-import 'package:shared_preferences/shared_preferences.dart';
-import 'data/datasources/cacao_manual_seeder.dart';
-import '../../core/di/injection_container.dart';
+import 'data/datasources/cacao_manual_database.dart';
 
+/// Initializes the Cacao Manual database.
+///
+/// The database is pre-built and shipped as an asset. On first launch
+/// (or when updated), it's copied from assets to the app's database directory.
+///
+/// Usage in main.dart:
+/// ```dart
+/// void main() async {
+///   WidgetsFlutterBinding.ensureInitialized();
+///   await CacaoManualInitializer.initialize();
+///   runApp(const MyApp());
+/// }
+/// ```
 class CacaoManualInitializer {
-  static const String _seedVersionKey = 'cacao_manual_seed_version';
-  static const int _currentSeedVersion = 2;
-
+  /// Initialize the cacao manual database.
+  /// This will copy the pre-built database from assets if needed.
   static Future<void> initialize() async {
-    final prefs = await SharedPreferences.getInstance();
-    final seedVersion = prefs.getInt(_seedVersionKey) ?? 0;
-
-    if (seedVersion < _currentSeedVersion) {
-      await _seedDatabase();
-      await prefs.setInt(_seedVersionKey, _currentSeedVersion);
-    }
+    // Simply access the database - this triggers the copy from assets if needed
+    await CacaoManualDatabase.instance.database;
   }
 
-  static Future<void> _seedDatabase() async {
-    final seeder = sl<CacaoManualSeeder>();
-    await seeder.seedDatabase();
+  /// Force reset the database from assets.
+  /// Useful for debugging or when you need to restore the original data.
+  static Future<void> forceReset() async {
+    await CacaoManualDatabase.instance.resetFromAssets();
   }
 
-  static Future<void> forceReseed() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(_seedVersionKey);
-    await initialize();
+  /// Check if database needs to be updated from assets.
+  static Future<bool> needsUpdate() async {
+    return await CacaoManualDatabase.instance.needsUpdate();
+  }
+
+  /// Get the currently installed database version.
+  static Future<int> getInstalledVersion() async {
+    return await CacaoManualDatabase.instance.getInstalledVersion();
   }
 }
