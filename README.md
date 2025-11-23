@@ -150,3 +150,11 @@ El proyecto sigue el patrón BLoC (Business Logic Component):
 3. Commit tus cambios (`git commit -m 'Add some AmazingFeature'`)
 4. Push a la rama (`git push origin feature/AmazingFeature`)
 5. Abre un Pull Request
+
+
+## Actualizar la BD en el futuro
+
+1. Editar scripts/create_cacao_db.py con nuevo contenido
+2. Ejecutar python3 scripts/create_cacao_db.py
+3. Incrementar _currentDbVersion en cacao_manual_database.dart
+4. Publicar nueva versión de la app

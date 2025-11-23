@@ -1700,6 +1700,7 @@ class _ConversationalConsultationPageState extends State<ConversationalConsultat
                   ),
                   value: _isOfflineMode,
                   activeColor: AppTheme.primaryColor,
+<<<<<<< HEAD
                   onChanged: _offlineModeService != null
                       ? (value) async {
                           await _offlineModeService!.setOfflineMode(value);
@@ -1707,6 +1708,13 @@ class _ConversationalConsultationPageState extends State<ConversationalConsultat
                           setState(() {});
                         }
                       : null,
+=======
+                  onChanged: (value) async {
+                    await _offlineModeService.setOfflineMode(value);
+                    setModalState(() {});
+                    setState(() {});
+                  },
+>>>>>>> origin/main
                 ),
               ),
               const SizedBox(height: 8),
