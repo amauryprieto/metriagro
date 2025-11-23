@@ -5,6 +5,7 @@ import 'dart:io';
 import '../../../shared/services/vision_router.dart';
 import '../../../shared/services/audio_transcriber.dart';
 import '../../../shared/services/local_knowledge_base.dart';
+import '../../../shared/services/offline_mode_service.dart';
 
 /// Interfaz principal del motor conversacional
 /// Permite intercambiar implementaciones online/offline de forma transparente
@@ -25,18 +26,22 @@ abstract class ConversationEngine {
 }
 
 /// Router que decide automáticamente entre online/offline
+/// Respeta la preferencia del usuario si ha activado el modo offline forzado
 class ConversationRouter implements ConversationEngine {
   final ConversationEngine _onlineEngine;
   final ConversationEngine _offlineEngine;
   final ConnectivityService _connectivityService;
+  final OfflineModeService _offlineModeService;
 
   ConversationRouter({
     required ConversationEngine onlineEngine,
     required ConversationEngine offlineEngine,
     required ConnectivityService connectivityService,
+    required OfflineModeService offlineModeService,
   }) : _onlineEngine = onlineEngine,
        _offlineEngine = offlineEngine,
-       _connectivityService = connectivityService;
+       _connectivityService = connectivityService,
+       _offlineModeService = offlineModeService;
 
   @override
   String get name => 'ConversationRouter';
@@ -61,9 +66,18 @@ class ConversationRouter implements ConversationEngine {
   @override
   Future<ConversationResponse> processConversation(ConversationRequest request) async {
     try {
+      // Check if user has forced offline mode
+      final forceOffline = _offlineModeService.isOfflineMode;
+
       // For image processing, always use offline engine to leverage local ML
       if (request.hasImage) {
         print('[ConversationRouter] Using offline engine for image processing');
+        return await _offlineEngine.processConversation(request);
+      }
+
+      // If user has forced offline mode, always use offline engine
+      if (forceOffline) {
+        print('[ConversationRouter] Using offline engine (user preference)');
         return await _offlineEngine.processConversation(request);
       }
 

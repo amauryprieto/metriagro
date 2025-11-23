@@ -24,6 +24,7 @@ import '../../shared/services/local_knowledge_base.dart';
 import '../../shared/services/audio_transcriber.dart';
 import '../../shared/services/tts_speaker.dart';
 import '../../shared/services/history_storage.dart';
+import '../../shared/services/offline_mode_service.dart';
 
 // Cacao Manual imports
 import '../../features/cacao_manual/data/datasources/cacao_manual_database.dart';
@@ -75,6 +76,9 @@ Future<void> configureDependencies() async {
   // TTS
   sl.registerLazySingleton<TtsSpeaker>(() => FlutterTtsSpeaker());
 
+  // Offline Mode Service
+  sl.registerLazySingleton<OfflineModeService>(() => OfflineModeService());
+
   // Conversation Engines
   sl.registerLazySingleton<ConversationEngine>(
     () => ConversationRouter(
@@ -85,6 +89,7 @@ Future<void> configureDependencies() async {
         localKB: sl<LocalKnowledgeBase>(),
       ),
       connectivityService: sl<ConnectivityService>(),
+      offlineModeService: sl<OfflineModeService>(),
     ),
   );
 

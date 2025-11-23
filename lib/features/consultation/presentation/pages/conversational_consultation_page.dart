@@ -5,6 +5,7 @@ import 'package:metriagro/core/di/injection_container.dart';
 import '../../../conversation/presentation/bloc/conversation_bloc.dart';
 import '../../../../shared/models/conversation_models.dart';
 import '../../../../shared/services/whisper_transcriber.dart';
+import '../../../../shared/services/offline_mode_service.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:typed_data';
 import '../../../../shared/services/history_storage.dart';
@@ -37,10 +38,33 @@ class _ConversationalConsultationPageState extends State<ConversationalConsultat
   final List<ChatMessage> _messages = [];
   Timer? _debounceTimer;
 
+  // Offline mode
+  late final OfflineModeService _offlineModeService;
+  bool _isOfflineMode = false;
+  StreamSubscription<bool>? _offlineModeSubscription;
+
   @override
   void initState() {
     super.initState();
+    _initializeOfflineMode();
     _initializeChat();
+  }
+
+  Future<void> _initializeOfflineMode() async {
+    _offlineModeService = sl<OfflineModeService>();
+    await _offlineModeService.initialize();
+    if (mounted) {
+      setState(() {
+        _isOfflineMode = _offlineModeService.isOfflineMode;
+      });
+    }
+    _offlineModeSubscription = _offlineModeService.offlineModeStream.listen((isOffline) {
+      if (mounted) {
+        setState(() {
+          _isOfflineMode = isOffline;
+        });
+      }
+    });
   }
 
   void _initializeChat() {
@@ -185,19 +209,32 @@ class _ConversationalConsultationPageState extends State<ConversationalConsultat
       backgroundColor: AppTheme.primaryColor,
       foregroundColor: Colors.white,
       elevation: 0,
-      title: const Row(
+      title: Row(
         children: [
-          CircleAvatar(
+          const CircleAvatar(
             backgroundColor: Colors.white,
             radius: 16,
             child: Icon(Icons.agriculture, color: AppTheme.primaryColor, size: 16),
           ),
-          SizedBox(width: 12),
+          const SizedBox(width: 12),
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Asistente Metriagro', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-              Text('En línea', style: TextStyle(fontSize: 12, color: Colors.white70)),
+              const Text('Asistente Metriagro', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+              Row(
+                children: [
+                  Icon(
+                    _isOfflineMode ? Icons.cloud_off : Icons.cloud,
+                    size: 12,
+                    color: Colors.white70,
+                  ),
+                  const SizedBox(width: 4),
+                  Text(
+                    _isOfflineMode ? 'Modo Offline' : 'En línea',
+                    style: const TextStyle(fontSize: 12, color: Colors.white70),
+                  ),
+                ],
+              ),
             ],
           ),
         ],
@@ -1602,54 +1639,94 @@ class _ConversationalConsultationPageState extends State<ConversationalConsultat
       context: context,
       backgroundColor: Colors.white,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-      builder: (context) => Container(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Center(
-              child: Container(
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(2)),
+      builder: (context) => StatefulBuilder(
+        builder: (context, setModalState) => Container(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(2)),
+                ),
               ),
-            ),
-            const SizedBox(height: 16),
-            const Text(
-              'Menú de Opciones',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: AppTheme.textPrimary),
-            ),
-            const SizedBox(height: 12),
-            ListTile(
-              leading: const Icon(Icons.history, color: AppTheme.primaryColor),
-              title: const Text('Ver historial'),
-              onTap: () {
-                Navigator.pop(context);
-                _showConversationHistory();
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.refresh, color: AppTheme.primaryColor),
-              title: const Text('Nueva conversación'),
-              onTap: () {
-                Navigator.pop(context);
-                setState(() {
-                  _messages.clear();
-                });
-                _initializeChat();
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.share, color: AppTheme.primaryColor),
-              title: const Text('Compartir conversación'),
-              onTap: () {
-                Navigator.pop(context);
-                // TODO: Implementar compartir
-              },
-            ),
-            const SizedBox(height: 8),
-          ],
+              const SizedBox(height: 16),
+              const Text(
+                'Menú de Opciones',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: AppTheme.textPrimary),
+              ),
+              const SizedBox(height: 12),
+              // Offline Mode Toggle
+              Container(
+                decoration: BoxDecoration(
+                  color: _isOfflineMode ? AppTheme.primaryColor.withAlpha(25) : Colors.grey.withAlpha(25),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: SwitchListTile(
+                  secondary: Icon(
+                    _isOfflineMode ? Icons.cloud_off : Icons.cloud,
+                    color: _isOfflineMode ? AppTheme.primaryColor : Colors.grey,
+                  ),
+                  title: Text(
+                    _isOfflineMode ? 'Modo Offline' : 'Modo Online',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w600,
+                      color: _isOfflineMode ? AppTheme.primaryColor : AppTheme.textPrimary,
+                    ),
+                  ),
+                  subtitle: Text(
+                    _isOfflineMode
+                        ? 'Consultas procesadas localmente'
+                        : 'Consultas enviadas al servidor',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.grey[600],
+                    ),
+                  ),
+                  value: _isOfflineMode,
+                  activeColor: AppTheme.primaryColor,
+                  onChanged: (value) async {
+                    await _offlineModeService.setOfflineMode(value);
+                    setModalState(() {});
+                    setState(() {});
+                  },
+                ),
+              ),
+              const SizedBox(height: 8),
+              const Divider(),
+              ListTile(
+                leading: const Icon(Icons.history, color: AppTheme.primaryColor),
+                title: const Text('Ver historial'),
+                onTap: () {
+                  Navigator.pop(context);
+                  _showConversationHistory();
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.refresh, color: AppTheme.primaryColor),
+                title: const Text('Nueva conversación'),
+                onTap: () {
+                  Navigator.pop(context);
+                  setState(() {
+                    _messages.clear();
+                  });
+                  _initializeChat();
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.share, color: AppTheme.primaryColor),
+                title: const Text('Compartir conversación'),
+                onTap: () {
+                  Navigator.pop(context);
+                  // TODO: Implementar compartir
+                },
+              ),
+              const SizedBox(height: 8),
+            ],
+          ),
         ),
       ),
     );
@@ -1678,6 +1755,7 @@ class _ConversationalConsultationPageState extends State<ConversationalConsultat
   @override
   void dispose() {
     _debounceTimer?.cancel();
+    _offlineModeSubscription?.cancel();
     _scrollController.dispose();
     _textController.dispose();
     super.dispose();
