@@ -94,10 +94,6 @@ dependencies:
   flutter_tts: ^4.2.0
   avatar_glow: ^3.0.1
 
-  # Local Database
-  sqflite: ^2.3.3+2
-  path: ^1.9.0
-
   # Natural Language Processing
   string_similarity: ^2.0.0
 
