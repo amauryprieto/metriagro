@@ -8,9 +8,13 @@ class CacaoManualDatabase {
   static const String _databaseName = 'cacao_manual.db';
   static const String _assetPath = 'assets/database/cacao_manual.db';
   static const String _dbVersionKey = 'cacao_manual_db_version';
+  static const String _schemaVersionKey = 'cacao_manual_schema_version';
 
   /// Increment this when the pre-built database in assets is updated
-  static const int _currentDbVersion = 1;
+  static const int _currentDbVersion = 2;
+
+  /// Increment this when schema changes are needed (embedding columns, etc.)
+  static const int _currentSchemaVersion = 2;
 
   static Database? _database;
 
@@ -30,7 +34,39 @@ class CacaoManualDatabase {
     // Check if we need to copy/update the database from assets
     await _ensureDatabaseFromAssets(path);
 
-    return await openDatabase(path);
+    // Open database and run migrations
+    final db = await openDatabase(path);
+    await _runMigrations(db);
+
+    return db;
+  }
+
+  /// Run schema migrations after database is opened
+  Future<void> _runMigrations(Database db) async {
+    final prefs = await SharedPreferences.getInstance();
+    final schemaVersion = prefs.getInt(_schemaVersionKey) ?? 1;
+
+    if (schemaVersion < 2) {
+      // Migration: Add embedding columns
+      await _migrateToV2(db);
+      await prefs.setInt(_schemaVersionKey, 2);
+      print('[CacaoManualDatabase] Migrated to schema version 2 (embeddings)');
+    }
+  }
+
+  /// Migration to add embedding columns
+  Future<void> _migrateToV2(Database db) async {
+    // Check if columns already exist
+    final tableInfo = await db.rawQuery('PRAGMA table_info(manual_sections)');
+    final columns = tableInfo.map((row) => row['name'] as String).toSet();
+
+    if (!columns.contains('embedding')) {
+      await db.execute('ALTER TABLE manual_sections ADD COLUMN embedding BLOB');
+    }
+
+    if (!columns.contains('embedding_norm')) {
+      await db.execute('ALTER TABLE manual_sections ADD COLUMN embedding_norm REAL');
+    }
   }
 
   /// Copies the pre-built database from assets if needed

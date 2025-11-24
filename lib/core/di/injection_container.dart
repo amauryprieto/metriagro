@@ -25,11 +25,15 @@ import '../../shared/services/audio_transcriber.dart';
 import '../../shared/services/tts_speaker.dart';
 import '../../shared/services/history_storage.dart';
 import '../../shared/services/offline_mode_service.dart';
+import '../../shared/services/embedding_cache.dart';
+import '../../shared/services/distiluse_embedding_service.dart';
+import '../services/text_embedding_service.dart';
 
 // Cacao Manual imports
 import '../../features/cacao_manual/data/datasources/cacao_manual_database.dart';
 import '../../features/cacao_manual/data/datasources/cacao_manual_local_datasource.dart';
 import '../../features/cacao_manual/data/datasources/cacao_manual_seeder.dart';
+import '../../features/cacao_manual/data/datasources/vector_search_datasource.dart';
 import '../../features/cacao_manual/data/repositories/cacao_manual_repository_impl.dart';
 import '../../features/cacao_manual/domain/repositories/cacao_manual_repository.dart';
 import '../../features/cacao_manual/domain/usecases/search_manual.dart';
@@ -37,6 +41,7 @@ import '../../features/cacao_manual/domain/usecases/get_sections_by_ml_class.dar
 import '../../features/cacao_manual/domain/usecases/get_combined_diagnosis.dart';
 import '../../features/cacao_manual/domain/usecases/get_section_by_id.dart';
 import '../../features/cacao_manual/domain/usecases/get_all_chapters.dart';
+import '../../features/cacao_manual/domain/usecases/semantic_search.dart';
 
 final sl = GetIt.instance;
 
@@ -79,7 +84,10 @@ Future<void> configureDependencies() async {
   // Offline Mode Service
   sl.registerLazySingleton<OfflineModeService>(() => OfflineModeService());
 
-  // Conversation Engines
+  // Cacao Manual Feature (must be registered before ConversationEngine for vector search)
+  await _registerCacaoManualFeature();
+
+  // Conversation Engines (after cacao manual so VectorSearchDataSource is available)
   sl.registerLazySingleton<ConversationEngine>(
     () => ConversationRouter(
       onlineEngine: OnlineConversationService(),
@@ -87,6 +95,7 @@ Future<void> configureDependencies() async {
         audioTranscriber: sl<AudioTranscriber>(),
         visionRouter: sl<shared_vision.VisionRouter>(),
         localKB: sl<LocalKnowledgeBase>(),
+        vectorSearch: sl<VectorSearchDataSource>(),
       ),
       connectivityService: sl<ConnectivityService>(),
       offlineModeService: sl<OfflineModeService>(),
@@ -113,9 +122,6 @@ Future<void> configureDependencies() async {
       trackAutomaticEvents: true,
     );
   });
-
-  // Cacao Manual Feature
-  await _registerCacaoManualFeature();
 }
 
 Future<void> _registerCacaoManualFeature() async {
@@ -137,10 +143,24 @@ Future<void> _registerCacaoManualFeature() async {
     () => CacaoManualRepositoryImpl(localDataSource: sl()),
   );
 
+  // Embedding services for semantic search
+  sl.registerLazySingleton<EmbeddingCache>(() => EmbeddingCache(maxSize: 100));
+  sl.registerLazySingleton<TextEmbeddingService>(() => DistilUseEmbeddingService());
+
+  // Vector search data source
+  sl.registerLazySingleton<VectorSearchDataSource>(
+    () => VectorSearchDataSource(
+      database: sl<CacaoManualDatabase>(),
+      embeddingService: sl<TextEmbeddingService>(),
+      cache: sl<EmbeddingCache>(),
+    ),
+  );
+
   // Use cases
   sl.registerLazySingleton(() => SearchManual(sl()));
   sl.registerLazySingleton(() => GetSectionsByMlClass(sl()));
   sl.registerLazySingleton(() => GetCombinedDiagnosis(sl()));
   sl.registerLazySingleton(() => GetSectionById(sl()));
   sl.registerLazySingleton(() => GetAllChapters(sl()));
+  sl.registerLazySingleton(() => SemanticSearch(sl<VectorSearchDataSource>()));
 }

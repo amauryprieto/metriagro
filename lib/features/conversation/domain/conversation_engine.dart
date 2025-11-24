@@ -6,6 +6,7 @@ import '../../../shared/services/vision_router.dart';
 import '../../../shared/services/audio_transcriber.dart';
 import '../../../shared/services/local_knowledge_base.dart';
 import '../../../shared/services/offline_mode_service.dart';
+import '../../cacao_manual/data/datasources/vector_search_datasource.dart';
 
 /// Interfaz principal del motor conversacional
 /// Permite intercambiar implementaciones online/offline de forma transparente
@@ -175,19 +176,22 @@ class OnlineConversationService implements ConversationEngine {
   }
 }
 
-/// Motor conversacional offline (usa ML local + BD local)
+/// Motor conversacional offline (usa ML local + BD local + búsqueda semántica)
 class OfflineConversationService implements ConversationEngine {
   final AudioTranscriber? _audioTranscriber;
   final VisionRouter _visionRouter;
   final LocalKnowledgeBase _localKB;
+  final VectorSearchDataSource? _vectorSearch;
 
   OfflineConversationService({
     AudioTranscriber? audioTranscriber,
     required VisionRouter visionRouter,
     required LocalKnowledgeBase localKB,
+    VectorSearchDataSource? vectorSearch,
   }) : _audioTranscriber = audioTranscriber,
        _visionRouter = visionRouter,
-       _localKB = localKB;
+       _localKB = localKB,
+       _vectorSearch = vectorSearch;
 
   @override
   String get name => 'OfflineConversationService';
@@ -273,26 +277,26 @@ class OfflineConversationService implements ConversationEngine {
       treatmentInfo = await _localKB.getTreatment(visionResult.diseaseId);
     }
 
-    // 6. Búsqueda semántica y validación cruzada
+    // 6. Búsqueda semántica vectorial
+    List<VectorSearchResult> semanticResults = [];
     if (transcribedText != null && transcribedText.isNotEmpty) {
       // Validación cruzada
       hasContextMismatch =
           extractedHint != null && extractedHint != visionResult?.cropType && extractedHint != CropType.unknown;
 
-      if (hasContextMismatch) {
-        // Si hay mismatch, buscar también con el hint del usuario
-        final altDiseases = await _localKB.searchDiseasesByKeywords(
-          transcribedText,
-          cropType: extractedHint.toString().split('.').last,
-        );
-        alternativeTreatments = await _localKB.getTreatmentsForDiseases(altDiseases.map((d) => d.id).toList());
-      } else if (visionResult != null) {
-        // Búsqueda semántica normal
-        final diseases = await _localKB.searchDiseasesByKeywords(
-          transcribedText,
-          cropType: visionResult.cropType.toString().split('.').last,
-        );
-        alternativeTreatments = await _localKB.getTreatmentsForDiseases(diseases.map((d) => d.id).toList());
+      // Usar búsqueda semántica si está disponible
+      if (_vectorSearch != null) {
+        try {
+          print('[OfflineConversationService] Performing semantic search for: $transcribedText');
+          semanticResults = await _vectorSearch.search(
+            transcribedText,
+            topK: 3,
+            minSimilarity: 0.4,
+          );
+          print('[OfflineConversationService] Found ${semanticResults.length} semantic results');
+        } catch (e) {
+          print('[OfflineConversationService] Semantic search error: $e');
+        }
       }
     }
 
@@ -305,6 +309,7 @@ class OfflineConversationService implements ConversationEngine {
       extractedHint: extractedHint,
       alternatives: alternativeTreatments,
       hasContextMismatch: hasContextMismatch,
+      semanticResults: semanticResults,
     );
 
     return ConversationResponse(
@@ -368,10 +373,42 @@ class OfflineConversationService implements ConversationEngine {
     CropType? extractedHint,
     List<TreatmentInfo>? alternatives,
     bool hasContextMismatch = false,
+    List<VectorSearchResult>? semanticResults,
   }) {
     final buffer = StringBuffer();
 
-    // Encabezado
+    // Si hay resultados semánticos, mostrarlos primero para consultas de texto
+    if (semanticResults != null && semanticResults.isNotEmpty && visionResult == null) {
+      buffer.writeln('📚 **Información encontrada:**');
+      buffer.writeln();
+
+      for (var i = 0; i < semanticResults.length; i++) {
+        final result = semanticResults[i];
+        final relevance = (result.similarity * 100).toStringAsFixed(0);
+
+        buffer.writeln('**${i + 1}. ${result.sectionTitle}** (${relevance}% relevante)');
+        buffer.writeln();
+        buffer.writeln(result.snippet);
+
+        if (result.treatment != null && result.treatment!.isNotEmpty) {
+          buffer.writeln();
+          buffer.writeln('💊 **Tratamiento:** ${result.treatment}');
+        }
+
+        if (result.prevention != null && result.prevention!.isNotEmpty) {
+          buffer.writeln();
+          buffer.writeln('🛡️ **Prevención:** ${result.prevention}');
+        }
+
+        buffer.writeln();
+        buffer.writeln('---');
+        buffer.writeln();
+      }
+
+      return buffer.toString().trim();
+    }
+
+    // Encabezado para análisis con imagen
     buffer.writeln('🔍 **Análisis completado**');
     buffer.writeln();
 
