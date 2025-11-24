@@ -95,7 +95,9 @@ Future<void> configureDependencies() async {
         audioTranscriber: sl<AudioTranscriber>(),
         visionRouter: sl<shared_vision.VisionRouter>(),
         localKB: sl<LocalKnowledgeBase>(),
-        vectorSearch: sl<VectorSearchDataSource>(),
+        vectorSearch: sl.isRegistered<VectorSearchDataSource>()
+            ? sl<VectorSearchDataSource>()
+            : null,
       ),
       connectivityService: sl<ConnectivityService>(),
       offlineModeService: sl<OfflineModeService>(),
@@ -143,18 +145,21 @@ Future<void> _registerCacaoManualFeature() async {
     () => CacaoManualRepositoryImpl(localDataSource: sl()),
   );
 
-  // Embedding services for semantic search
+  // Embedding services for semantic search (optional - requires TFLite model)
+  // These services will be available once the model files are added to assets/models/
   sl.registerLazySingleton<EmbeddingCache>(() => EmbeddingCache(maxSize: 100));
-  sl.registerLazySingleton<TextEmbeddingService>(() => DistilUseEmbeddingService());
 
-  // Vector search data source
-  sl.registerLazySingleton<VectorSearchDataSource>(
-    () => VectorSearchDataSource(
-      database: sl<CacaoManualDatabase>(),
-      embeddingService: sl<TextEmbeddingService>(),
-      cache: sl<EmbeddingCache>(),
-    ),
-  );
+  // Note: VectorSearchDataSource and TextEmbeddingService are not registered until
+  // the TFLite model (distiluse_base.tflite) and vocab.txt are added to assets/models/
+  // TODO: Uncomment when model files are available:
+  // sl.registerLazySingleton<TextEmbeddingService>(() => DistilUseEmbeddingService());
+  // sl.registerLazySingleton<VectorSearchDataSource>(
+  //   () => VectorSearchDataSource(
+  //     database: sl<CacaoManualDatabase>(),
+  //     embeddingService: sl<TextEmbeddingService>(),
+  //     cache: sl<EmbeddingCache>(),
+  //   ),
+  // );
 
   // Use cases
   sl.registerLazySingleton(() => SearchManual(sl()));
@@ -162,5 +167,6 @@ Future<void> _registerCacaoManualFeature() async {
   sl.registerLazySingleton(() => GetCombinedDiagnosis(sl()));
   sl.registerLazySingleton(() => GetSectionById(sl()));
   sl.registerLazySingleton(() => GetAllChapters(sl()));
-  sl.registerLazySingleton(() => SemanticSearch(sl<VectorSearchDataSource>()));
+  // TODO: Uncomment when model files are available:
+  // sl.registerLazySingleton(() => SemanticSearch(sl<VectorSearchDataSource>()));
 }
