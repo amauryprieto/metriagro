@@ -47,19 +47,23 @@ final sl = GetIt.instance;
 
 @InjectableInit()
 Future<void> configureDependencies() async {
-  // Initialize Firebase
-  await Firebase.initializeApp();
+  print('[DI] Starting configureDependencies...');
 
-  // Initialize Hive
+  // Initialize Hive (Firebase already initialized in main.dart)
+  print('[DI] Initializing Hive...');
   await Hive.initFlutter();
+  print('[DI] Hive initialized');
 
   // Core
+  print('[DI] Registering Core services...');
   sl.registerLazySingleton<NetworkInfo>(() => NetworkInfoImpl());
   sl.registerLazySingleton<MlInferenceService>(() => LocalTfliteInferenceService());
   sl.registerLazySingleton<GcpDiseaseApiService>(() => GcpDiseaseApiServiceImpl(sl()));
   sl.registerLazySingleton<ConnectivityService>(() => ConnectivityServiceImpl());
+  print('[DI] Core services registered');
 
   // Vision Router with a basic classifier (choose one crop as default, can be extended)
+  print('[DI] Registering VisionRouter...');
   sl.registerLazySingleton<shared_vision.VisionRouter>(() {
     final router = shared_vision.VisionRouter(
       classifiers: [
@@ -69,25 +73,40 @@ Future<void> configureDependencies() async {
     );
     return router;
   });
+  print('[DI] VisionRouter registered');
 
   // Local Knowledge Base
+  print('[DI] Registering LocalKnowledgeBase...');
   sl.registerLazySingleton<LocalKnowledgeBase>(() => SqliteKnowledgeBase());
+  print('[DI] LocalKnowledgeBase registered');
 
   // History storage
+  print('[DI] Registering HistoryStorage...');
   sl.registerLazySingleton<HistoryStorage>(() => SqliteHistoryStorage());
+  print('[DI] HistoryStorage registered');
 
   // Audio Transcriber
+  print('[DI] Registering AudioTranscriber...');
   sl.registerLazySingleton<AudioTranscriber>(() => SpeechToTextTranscriber());
+  print('[DI] AudioTranscriber registered');
+
   // TTS
+  print('[DI] Registering TtsSpeaker...');
   sl.registerLazySingleton<TtsSpeaker>(() => FlutterTtsSpeaker());
+  print('[DI] TtsSpeaker registered');
 
   // Offline Mode Service
+  print('[DI] Registering OfflineModeService...');
   sl.registerLazySingleton<OfflineModeService>(() => OfflineModeService());
+  print('[DI] OfflineModeService registered');
 
   // Cacao Manual Feature (must be registered before ConversationEngine for vector search)
+  print('[DI] Registering CacaoManualFeature...');
   await _registerCacaoManualFeature();
+  print('[DI] CacaoManualFeature registered');
 
   // Conversation Engines (after cacao manual so VectorSearchDataSource is available)
+  print('[DI] Registering ConversationEngine...');
   sl.registerLazySingleton<ConversationEngine>(
     () => ConversationRouter(
       onlineEngine: OnlineConversationService(),
@@ -103,8 +122,10 @@ Future<void> configureDependencies() async {
       offlineModeService: sl<OfflineModeService>(),
     ),
   );
+  print('[DI] ConversationEngine registered');
 
   // External
+  print('[DI] Registering External services...');
   sl.registerLazySingleton(() => SharedPreferences.getInstance());
   sl.registerLazySingleton(() => FirebaseAuth.instance);
   sl.registerLazySingleton(() => FirebaseFirestore.instance);
@@ -113,41 +134,60 @@ Future<void> configureDependencies() async {
   sl.registerLazySingleton(() => FirebaseCrashlytics.instance);
   sl.registerLazySingleton(() => FirebaseMessaging.instance);
   sl.registerLazySingleton(() => FirebaseFunctions.instance);
+  print('[DI] External services registered');
 
   // HTTP Client
+  print('[DI] Registering Dio...');
   sl.registerLazySingleton(() => Dio());
+  print('[DI] Dio registered');
 
   // Analytics
+  print('[DI] Registering Mixpanel...');
   sl.registerLazySingletonAsync<Mixpanel>(() async {
     return await Mixpanel.init(
       'YOUR_MIXPANEL_TOKEN', // TODO: Replace with actual token
       trackAutomaticEvents: true,
     );
   });
+  print('[DI] Mixpanel registered');
+
+  print('[DI] configureDependencies complete!');
 }
 
 Future<void> _registerCacaoManualFeature() async {
+  print('[DI-Cacao] Starting _registerCacaoManualFeature...');
+
   // Database
+  print('[DI-Cacao] Registering CacaoManualDatabase...');
   sl.registerLazySingleton<CacaoManualDatabase>(() => CacaoManualDatabase.instance);
+  print('[DI-Cacao] CacaoManualDatabase registered');
 
   // Data sources
+  print('[DI-Cacao] Registering CacaoManualLocalDataSource...');
   sl.registerLazySingleton<CacaoManualLocalDataSource>(
     () => CacaoManualLocalDataSourceImpl(databaseHelper: sl()),
   );
+  print('[DI-Cacao] CacaoManualLocalDataSource registered');
 
   // Seeder
+  print('[DI-Cacao] Registering CacaoManualSeeder...');
   sl.registerLazySingleton<CacaoManualSeeder>(
     () => CacaoManualSeeder(sl()),
   );
+  print('[DI-Cacao] CacaoManualSeeder registered');
 
   // Repository
+  print('[DI-Cacao] Registering CacaoManualRepository...');
   sl.registerLazySingleton<CacaoManualRepository>(
     () => CacaoManualRepositoryImpl(localDataSource: sl()),
   );
+  print('[DI-Cacao] CacaoManualRepository registered');
 
   // Embedding services for semantic search (optional - requires TFLite model)
   // These services will be available once the model files are added to assets/models/
+  print('[DI-Cacao] Registering EmbeddingCache...');
   sl.registerLazySingleton<EmbeddingCache>(() => EmbeddingCache(maxSize: 100));
+  print('[DI-Cacao] EmbeddingCache registered');
 
   // Note: VectorSearchDataSource and TextEmbeddingService are not registered until
   // the TFLite model (distiluse_base.tflite) and vocab.txt are added to assets/models/
@@ -162,11 +202,15 @@ Future<void> _registerCacaoManualFeature() async {
   // );
 
   // Use cases
+  print('[DI-Cacao] Registering Use Cases...');
   sl.registerLazySingleton(() => SearchManual(sl()));
   sl.registerLazySingleton(() => GetSectionsByMlClass(sl()));
   sl.registerLazySingleton(() => GetCombinedDiagnosis(sl()));
   sl.registerLazySingleton(() => GetSectionById(sl()));
   sl.registerLazySingleton(() => GetAllChapters(sl()));
+  print('[DI-Cacao] Use Cases registered');
   // TODO: Uncomment when model files are available:
   // sl.registerLazySingleton(() => SemanticSearch(sl<VectorSearchDataSource>()));
+
+  print('[DI-Cacao] _registerCacaoManualFeature complete!');
 }

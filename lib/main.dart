@@ -13,20 +13,34 @@ import 'shared/services/tts_speaker.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  print('[MAIN] WidgetsFlutterBinding initialized');
 
-  // Initialize Firebase
-  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  try {
+    // Initialize Firebase
+    print('[MAIN] Initializing Firebase...');
+    await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+    print('[MAIN] Firebase initialized');
 
-  // Initialize Firebase Analytics
-  await FirebaseAnalyticsConfig.initialize();
+    // Initialize Firebase Analytics
+    print('[MAIN] Initializing Firebase Analytics...');
+    await FirebaseAnalyticsConfig.initialize();
+    print('[MAIN] Firebase Analytics initialized');
 
-  // Initialize Hive
-  // await Hive.initFlutter();
+    // Initialize Hive
+    // await Hive.initFlutter();
 
-  // Configure dependencies
-  await configureDependencies();
+    // Configure dependencies
+    print('[MAIN] Configuring dependencies...');
+    await configureDependencies();
+    print('[MAIN] Dependencies configured');
 
-  runApp(const MetriagroApp());
+    print('[MAIN] Starting app...');
+    runApp(const MetriagroApp());
+  } catch (e, stackTrace) {
+    print('[MAIN] ERROR: $e');
+    print('[MAIN] Stack trace: $stackTrace');
+    rethrow;
+  }
 }
 
 class MetriagroApp extends StatelessWidget {
